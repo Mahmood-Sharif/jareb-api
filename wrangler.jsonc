@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jareb-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "vars": {
+    "ENVIRONMENT": "development",
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:5173"
+  }
+}
