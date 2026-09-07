@@ -10,6 +10,9 @@ const workerEnvSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_ANON_KEY: z.string().min(1).optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  TARABUT_CLIENT_ID: z.string().min(1).optional(),
+  TARABUT_CLIENT_SECRET: z.string().min(1).optional(),
+  TARABUT_OAUTH_URL: z.string().url().optional(),
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
