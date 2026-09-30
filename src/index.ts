@@ -1,23 +1,14 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 
-import { getAllowedOrigins } from './config/env';
 import { AppError, jsonError, toAppError } from './errors/app-error';
 import { createRequireAuth, type GetUserFromToken } from './middleware/auth';
+import { withCors } from './middleware/cors';
 import { createClaimsRoutes } from './routes/claims';
 import { createDropsRoutes } from './routes/drops';
 import { createMeRoutes, type LoadProfile, type UpdateProfile } from './routes/me';
 import { healthRoutes } from './routes/health';
 import { rewardsService, type RewardsService } from './services/rewards';
 import type { AppEnv } from './types/app';
-
-function resolveCorsOrigin(origin: string, allowedOrigins: string[]) {
-  if (!origin) {
-    return '';
-  }
-
-  return allowedOrigins.includes(origin) ? origin : '';
-}
 
 export function createApp({
   getUserFromToken,
@@ -33,15 +24,7 @@ export function createApp({
   const app = new Hono<AppEnv>();
   const authMiddleware = createRequireAuth(getUserFromToken);
 
-  app.use(
-    '*',
-    cors({
-      origin: (origin, c) => resolveCorsOrigin(origin, getAllowedOrigins(c.env)),
-      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Authorization', 'Content-Type'],
-      maxAge: 86400,
-    }),
-  );
+  app.use('*', withCors());
 
   app.route('/health', healthRoutes);
   app.route('/me', createMeRoutes({ authMiddleware, loadProfile, updateProfile }));
