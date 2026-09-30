@@ -2,6 +2,7 @@ import { getSupabaseAuthConfig } from '../config/env';
 import { AppError } from '../errors/app-error';
 import { createSupabaseUserClient } from './supabase';
 import type { Bindings } from '../types/app';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 export type JarebProfile = {
   fullName: string | null;
@@ -10,6 +11,12 @@ export type JarebProfile = {
 };
 
 type ProfileRow = {
+  full_name: string | null;
+  phone: string | null;
+  benefitpay_number: string | null;
+};
+
+type UpdateProfileResult = {
   full_name: string | null;
   phone: string | null;
   benefitpay_number: string | null;
@@ -49,4 +56,86 @@ export async function loadCurrentUserProfile({
     phone: data.phone,
     benefitpayNumber: data.benefitpay_number,
   };
+}
+
+export async function updateCurrentUserProfile({
+  accessToken,
+  benefitpayNumber,
+  bindings,
+  fullName,
+  phone,
+}: {
+  accessToken: string;
+  bindings: Bindings;
+  fullName: string;
+  phone: string;
+  benefitpayNumber?: string | null;
+}): Promise<JarebProfile> {
+  const supabaseConfig = getSupabaseAuthConfig(bindings);
+  const supabase = createSupabaseUserClient({
+    ...supabaseConfig,
+    accessToken,
+  });
+
+  const { data, error } = await supabase.rpc('update_my_profile', {
+    input_full_name: fullName,
+    input_phone: phone,
+    input_benefitpay_number: benefitpayNumber ?? null,
+  });
+
+  if (error) {
+    throw toUpdateProfileAppError(error);
+  }
+
+  const result = Array.isArray(data)
+    ? (data[0] as UpdateProfileResult | undefined)
+    : (data as UpdateProfileResult | null);
+
+  if (!result) {
+    throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not update profile.');
+  }
+
+  return {
+    fullName: result.full_name,
+    phone: result.phone,
+    benefitpayNumber: result.benefitpay_number,
+  };
+}
+
+function toUpdateProfileAppError(error: PostgrestError) {
+  const message = error.message.toLowerCase();
+
+  if (error.code === '42501' || message.includes('authentication required')) {
+    return new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+  }
+
+  if (error.code === 'P0002' || message.includes('profile not found')) {
+    return new AppError(404, 'PROFILE_NOT_FOUND', 'Profile not found.');
+  }
+
+  if (error.code === '23505' && message.includes('benefitpay')) {
+    return new AppError(
+      409,
+      'PAYOUT_PHONE_IN_USE',
+      'This BenefitPay number is already linked to another account.',
+    );
+  }
+
+  if (error.code === '23505' && message.includes('phone')) {
+    return new AppError(409, 'PHONE_IN_USE', 'This phone number is already registered.');
+  }
+
+  if (message.includes('benefitpay')) {
+    return new AppError(400, 'INVALID_PAYOUT_PHONE', 'Enter a valid Bahrain BenefitPay number.');
+  }
+
+  if (message.includes('phone')) {
+    return new AppError(400, 'INVALID_PHONE', 'Enter a valid Bahrain phone number.');
+  }
+
+  if (message.includes('full name')) {
+    return new AppError(400, 'BAD_REQUEST', 'Full name is required.');
+  }
+
+  return new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not update profile.');
 }
