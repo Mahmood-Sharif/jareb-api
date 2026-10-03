@@ -29,6 +29,10 @@ type DropRow = {
   validation_method: string | null;
   start_date: string | null;
   end_date: string | null;
+  merchant_name?: string | null;
+  merchant_branch?: string | null;
+  merchant_area?: string | null;
+  merchant_image_url?: string | null;
   merchants?: MerchantRow | MerchantRow[] | null;
 };
 
@@ -120,9 +124,6 @@ export type RewardsService = {
   ): Promise<ClaimDto>;
 };
 
-const DROP_SELECT =
-  'id, title, description, cashback_amount, minimum_spend, validation_method, start_date, end_date, merchants!inner(name, branch, area, merchant_image_url, is_active)';
-
 const CLAIM_SELECT =
   'id, drop_id, status, claim_code, cashback_amount, amount_spent, payout_phone, rejected_reason, claim_expires_at, expired_at, drops(id, title, description, cashback_amount, minimum_spend, validation_method, start_date, end_date, merchants(name, branch, area, merchant_image_url))';
 
@@ -136,16 +137,8 @@ function createClient({ accessToken, bindings }: RewardsServiceContext) {
 export const rewardsService: RewardsService = {
   async listDrops(context) {
     const supabase = createClient(context);
-    const nowIso = new Date().toISOString();
 
-    const { data, error } = await supabase
-      .from('drops')
-      .select(DROP_SELECT)
-      .eq('is_active', true)
-      .lte('start_date', nowIso)
-      .gte('end_date', nowIso)
-      .eq('merchants.is_active', true)
-      .order('created_at', { ascending: true });
+    const { data, error } = await supabase.rpc('list_available_drops');
 
     if (error) {
       throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load drops.');
@@ -157,8 +150,7 @@ export const rewardsService: RewardsService = {
   async getDrop(context) {
     const supabase = createClient(context);
     const { data, error } = await supabase
-      .from('drops')
-      .select(DROP_SELECT)
+      .rpc('list_available_drops')
       .eq('id', context.dropId)
       .maybeSingle();
 
@@ -349,7 +341,26 @@ function toDropDto(row: DropRow): DropDto {
     validationMethod: row.validation_method,
     startDate: row.start_date,
     endDate: row.end_date,
-    merchant: row.merchants ? toMerchantDto(normalizeRelation(row.merchants)) : null,
+    merchant: getDropMerchant(row),
+  };
+}
+
+function getDropMerchant(row: DropRow): MerchantDto | null {
+  if (row.merchants) return toMerchantDto(normalizeRelation(row.merchants));
+  if (
+    row.merchant_name === undefined &&
+    row.merchant_branch === undefined &&
+    row.merchant_area === undefined &&
+    row.merchant_image_url === undefined
+  ) {
+    return null;
+  }
+
+  return {
+    name: row.merchant_name ?? null,
+    branch: row.merchant_branch ?? null,
+    area: row.merchant_area ?? null,
+    imageUrl: row.merchant_image_url ?? null,
   };
 }
 
@@ -405,6 +416,22 @@ function toClaimDropAppError(error: PostgrestError) {
 
   if (error.code === 'P0002' || message.includes('not found')) {
     return new AppError(404, 'DROP_NOT_FOUND', 'Drop not found.');
+  }
+
+  if (message.includes('merchant_already_redeemed')) {
+    return new AppError(
+      409,
+      'MERCHANT_ALREADY_REDEEMED',
+      "You've already tried this place through Jareb. Discover another reward.",
+    );
+  }
+
+  if (message.includes('merchant_claim_active')) {
+    return new AppError(
+      409,
+      'MERCHANT_CLAIM_ACTIVE',
+      'You already have a reward in progress for this place.',
+    );
   }
 
   if (error.code === '23505' || message.includes('existing active claim')) {

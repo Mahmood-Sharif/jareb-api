@@ -355,6 +355,28 @@ describe('drops and claims API', () => {
       'Active claim already exists.',
     ],
     [
+      'merchant already redeemed',
+      new AppError(
+        409,
+        'MERCHANT_ALREADY_REDEEMED',
+        "You've already tried this place through Jareb. Discover another reward.",
+      ),
+      409,
+      'MERCHANT_ALREADY_REDEEMED',
+      "You've already tried this place through Jareb. Discover another reward.",
+    ],
+    [
+      'merchant claim active',
+      new AppError(
+        409,
+        'MERCHANT_CLAIM_ACTIVE',
+        'You already have a reward in progress for this place.',
+      ),
+      409,
+      'MERCHANT_CLAIM_ACTIVE',
+      'You already have a reward in progress for this place.',
+    ],
+    [
       'expired',
       new AppError(410, 'DROP_EXPIRED', 'Drop is no longer available.'),
       410,
