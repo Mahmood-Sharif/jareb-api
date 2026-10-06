@@ -42,26 +42,30 @@ re-registration matching. Use a production-only value, not the dev one.
 npm ci; npm run typecheck; npm test; npm run build   # build = wrangler deploy --dry-run
 ```
 
-## Deploy (requires explicit approval, AFTER the DB migrations are applied)
+## Deploy (requires explicit approval, AFTER the DB migrations; see RUNBOOK step 12)
 
-The API calls RPCs (`get_customer_drop`, saved drops, account deletion, 5-arg
-`update_my_profile`) that do not exist in production until the migrations land.
-Deploy the API **after** `jareb-infra` Phase 3, never before.
+Authoritative commands and ordering: `jareb-infra/docs/production/RUNBOOK.md` steps 12 and 16a.
+In short: secrets first, then a first deploy that temporarily appends the Flutter preview origin,
+then a plain deploy after the domain cutover so only the two production origins remain:
 
 ```powershell
+# step 12 (preview origin appended via CLI, wrangler.jsonc is not edited)
+npx wrangler deploy --var "ALLOWED_ORIGINS:https://jareb.app,https://www.jareb.app,https://jareb-customer-web.<account>.workers.dev"
+# step 16a (production origins only, taken from wrangler.jsonc)
 npx wrangler deploy
 ```
 
-Then add a custom domain (e.g. `api.jareb.app`) in Cloudflare -> Workers -> jareb-api ->
-Settings -> Domains (DNS change: Mahmood). Use that URL as `JAREB_API_URL` for Flutter Web.
+The API calls RPCs (`get_customer_drop`, saved drops, account deletion, 5-arg `update_my_profile`)
+that do not exist in production until the migrations land: never deploy before runbook step 8.
+
+CORS: `admin.jareb.app` is intentionally not listed (jareb-web never calls this API).
+Custom domain `api.jareb.app`: Cloudflare Dashboard -> jareb-api -> Domains & Routes (new hostname, additive).
 
 ## Post-deploy verification
 
 ```powershell
-curl https://<api-host>/health
-curl -i -X OPTIONS https://<api-host>/wallet -H "Origin: https://jareb.app" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: Authorization"
-# expect Access-Control-Allow-Origin: https://jareb.app
-curl -i -X OPTIONS https://<api-host>/wallet -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: GET"
-# expect NO Access-Control-Allow-Origin
-curl -i https://<api-host>/wallet     # expect 401
+curl https://api.jareb.app/health
+curl -i https://api.jareb.app/wallet     # expect 401
+curl -i -X OPTIONS https://api.jareb.app/wallet -H "Origin: https://jareb.app" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: Authorization"   # allow-origin https://jareb.app
+curl -i -X OPTIONS https://api.jareb.app/wallet -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: GET"   # no allow-origin
 ```
