@@ -22,7 +22,8 @@ function isLocalDevelopmentOrigin(origin: string) {
 export function resolveCorsOrigin(origin: string | null, bindings: Partial<Bindings> = {}) {
   if (!origin) return '';
   if (getAllowedOrigins(bindings).includes(origin)) return origin;
-  if (isLocalDevelopmentOrigin(origin)) return origin;
+  // Production only answers to ALLOWED_ORIGINS. Localhost is a development convenience.
+  if (bindings.ENVIRONMENT !== 'production' && isLocalDevelopmentOrigin(origin)) return origin;
   return '';
 }
 

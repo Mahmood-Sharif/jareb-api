@@ -71,6 +71,39 @@ describe('CORS', () => {
     expectCors(response, configuredOrigin);
   });
 
+  it('does not allow localhost origins when ENVIRONMENT is production', async () => {
+    const productionBindings: Partial<Bindings> = {
+      ALLOWED_ORIGINS: 'https://jareb.app,https://www.jareb.app',
+      ENVIRONMENT: 'production',
+    };
+
+    const local = await createApp().request(
+      '/health',
+      { headers: { Origin: 'http://localhost:5173' } },
+      productionBindings,
+    );
+    expect(local.status).toBe(200);
+    expect(local.headers.get('Access-Control-Allow-Origin')).toBeNull();
+
+    const preflight = await createApp().request(
+      '/wallet',
+      {
+        headers: {
+          Origin: 'https://evil.example',
+          'Access-Control-Request-Method': 'GET',
+        },
+        method: 'OPTIONS',
+      },
+      productionBindings,
+    );
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBeNull();
+
+    for (const origin of ['https://jareb.app', 'https://www.jareb.app']) {
+      const ok = await createApp().request('/health', { headers: { Origin: origin } }, productionBindings);
+      expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+    }
+  });
+
   it('adds CORS to successful GET /drops responses', async () => {
     const response = await createApp({
       getUserFromToken: async () => authUser,
