@@ -44,7 +44,7 @@ npm ci; npm run typecheck; npm test; npm run build   # build = wrangler deploy -
 
 ## Deploy (requires explicit approval, AFTER the DB migrations are applied)
 
-The API calls RPCs (`get_customer_drop_detail`, saved drops, account deletion, 5-arg
+The API calls RPCs (`get_customer_drop`, saved drops, account deletion, 5-arg
 `update_my_profile`) that do not exist in production until the migrations land.
 Deploy the API **after** `jareb-infra` Phase 3, never before.
 
