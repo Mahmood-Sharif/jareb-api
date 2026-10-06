@@ -19,7 +19,7 @@ const authUser = {
 } as User;
 
 const rewardService: RewardsService = {
-  listDrops: vi.fn(async () => []),
+  listDrops: vi.fn(async () => ({ drops: [], serverNow: '2026-09-21T12:00:00.000Z' })),
   getDrop: vi.fn(),
   claimDrop: vi.fn(),
   listClaims: vi.fn(),
@@ -27,6 +27,7 @@ const rewardService: RewardsService = {
   getClaim: vi.fn(),
   saveClaimPayoutPhone: vi.fn(),
   verifyClaimMerchantPin: vi.fn(),
+  submitClaimReceipt: vi.fn(),
 };
 
 function expectCors(response: Response, origin = flutterWebOrigin) {

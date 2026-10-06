@@ -8,18 +8,27 @@ export type JarebProfile = {
   fullName: string | null;
   phone: string | null;
   benefitpayNumber: string | null;
+  termsAcceptedAt: string | null;
+  termsVersion: string | null;
+  privacyVersion: string | null;
 };
 
 type ProfileRow = {
   full_name: string | null;
   phone: string | null;
   benefitpay_number: string | null;
+  terms_accepted_at: string | null;
+  terms_version: string | null;
+  privacy_version: string | null;
 };
 
 type UpdateProfileResult = {
   full_name: string | null;
   phone: string | null;
   benefitpay_number: string | null;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
+  privacy_version?: string | null;
 };
 
 export async function loadCurrentUserProfile({
@@ -39,7 +48,7 @@ export async function loadCurrentUserProfile({
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, benefitpay_number')
+    .select('full_name, phone, benefitpay_number, terms_accepted_at, terms_version, privacy_version')
     .eq('id', userId)
     .maybeSingle<ProfileRow>();
 
@@ -55,6 +64,9 @@ export async function loadCurrentUserProfile({
     fullName: data.full_name,
     phone: data.phone,
     benefitpayNumber: data.benefitpay_number,
+    termsAcceptedAt: data.terms_accepted_at,
+    termsVersion: data.terms_version,
+    privacyVersion: data.privacy_version,
   };
 }
 
@@ -64,12 +76,16 @@ export async function updateCurrentUserProfile({
   bindings,
   fullName,
   phone,
+  privacyVersion,
+  termsVersion,
 }: {
   accessToken: string;
   bindings: Bindings;
   fullName: string;
-  phone: string;
+  phone?: string | null;
   benefitpayNumber?: string | null;
+  privacyVersion?: string | null;
+  termsVersion?: string | null;
 }): Promise<JarebProfile> {
   const supabaseConfig = getSupabaseAuthConfig(bindings);
   const supabase = createSupabaseUserClient({
@@ -79,8 +95,10 @@ export async function updateCurrentUserProfile({
 
   const { data, error } = await supabase.rpc('update_my_profile', {
     input_full_name: fullName,
-    input_phone: phone,
+    input_phone: phone ?? null,
     input_benefitpay_number: benefitpayNumber ?? null,
+    input_terms_version: termsVersion ?? null,
+    input_privacy_version: privacyVersion ?? null,
   });
 
   if (error) {
@@ -99,6 +117,9 @@ export async function updateCurrentUserProfile({
     fullName: result.full_name,
     phone: result.phone,
     benefitpayNumber: result.benefitpay_number,
+    termsAcceptedAt: result.terms_accepted_at ?? null,
+    termsVersion: result.terms_version ?? null,
+    privacyVersion: result.privacy_version ?? null,
   };
 }
 
@@ -127,6 +148,10 @@ function toUpdateProfileAppError(error: PostgrestError) {
 
   if (message.includes('benefitpay')) {
     return new AppError(400, 'INVALID_PAYOUT_PHONE', 'Enter a valid Bahrain BenefitPay number.');
+  }
+
+  if (message.includes('terms') || message.includes('privacy')) {
+    return new AppError(400, 'BAD_REQUEST', 'Terms and Privacy acceptance is required.');
   }
 
   if (message.includes('phone')) {

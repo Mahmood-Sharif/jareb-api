@@ -16,6 +16,17 @@ const verifyPinSchema = z.object({
   spendAmount: z.number().finite().positive(),
 });
 
+const receiptSchema = z.object({
+  storagePath: z.string().trim().min(1),
+  originalFilename: z.string().trim().min(1),
+  mimeType: z.string().trim().min(1),
+  fileSizeBytes: z.number().int().positive(),
+  amountSpent: z.number().finite().positive(),
+  purchaseDate: z.string().trim().min(1),
+  receiptNumber: z.string().trim().nullable().optional(),
+  customerNote: z.string().trim().nullable().optional(),
+});
+
 export function createClaimsRoutes({
   authMiddleware = requireAuth,
   service = rewardsService,
@@ -28,6 +39,7 @@ export function createClaimsRoutes({
     | 'getClaim'
     | 'saveClaimPayoutPhone'
     | 'verifyClaimMerchantPin'
+    | 'submitClaimReceipt'
   >;
 } = {}) {
   const claimsRoutes = new Hono<AppEnv>();
@@ -90,6 +102,26 @@ export function createClaimsRoutes({
     });
 
     return c.json({ claim });
+  });
+
+  claimsRoutes.post('/:id/receipt', async (c) => {
+    const body = receiptSchema.safeParse(await c.req.json().catch(() => null));
+
+    if (!body.success) {
+      throw new AppError(400, 'BAD_REQUEST', 'Valid receipt metadata is required.');
+    }
+
+    const user = c.get('authUser');
+    const accessToken = c.get('authAccessToken');
+    const result = await service.submitClaimReceipt({
+      accessToken,
+      bindings: c.env ?? {},
+      claimId: c.req.param('id'),
+      receipt: body.data,
+      userId: user.id,
+    });
+
+    return c.json(result);
   });
 
   claimsRoutes.patch('/:id/payout-phone', async (c) => {

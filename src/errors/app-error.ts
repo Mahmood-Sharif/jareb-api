@@ -2,12 +2,17 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export type AppErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'ACCOUNT_DELETE_FAILED'
   | 'BAD_REQUEST'
   | 'ALREADY_CLAIMED'
+  | 'AMOUNT_BELOW_MINIMUM'
+  | 'BENEFITPAY_IN_USE'
   | 'CLAIM_NOT_FOUND'
   | 'CLAIM_NOT_ACTIVE'
   | 'CLAIM_ALREADY_VERIFIED'
   | 'CLAIM_EXPIRED'
+  | 'DROP_UNAVAILABLE'
   | 'DROP_EXPIRED'
   | 'DROP_FULL'
   | 'DROP_INACTIVE'
@@ -21,12 +26,20 @@ export type AppErrorCode =
   | 'MISSING_PAYOUT_PHONE'
   | 'PAYOUT_PHONE_IN_USE'
   | 'PIN_LOCKED'
+  | 'PAYOUT_RETENTION_REQUIRED'
+  | 'RECEIPT_ALREADY_SUBMITTED'
+  | 'RECEIPT_TOO_LARGE'
+  | 'RECEIPT_TYPE_INVALID'
+  | 'RECEIPT_UPLOAD_NOT_FOUND'
+  | 'INVALID_RECEIPT'
+  | 'WRONG_VALIDATION_METHOD'
   | 'INVALID_PHONE'
   | 'PHONE_IN_USE'
   | 'PROFILE_NOT_FOUND'
   | 'UNAUTHORIZED'
   | 'NOT_FOUND'
   | 'CONFIGURATION_ERROR'
+  | 'INTERNAL_ERROR'
   | 'INTERNAL_SERVER_ERROR';
 
 export class AppError extends Error {

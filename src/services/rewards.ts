@@ -10,17 +10,37 @@ const ACTIVE_CLAIM_STATUSES = [
   'receipt_pending_review',
   'visited_pending_review',
   'approved',
-  'paid',
 ] as const;
 
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_RECEIPT_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+type CategoryRow = {
+  id: string;
+  name_en: string;
+  name_ar: string;
+  slug: string;
+  is_active?: boolean | null;
+};
+
+type MerchantCategoryRow = {
+  merchant_id: string;
+  is_primary: boolean | null;
+  sort_order: number | null;
+  categories?: CategoryRow | CategoryRow[] | null;
+};
+
 type MerchantRow = {
+  id?: string | null;
   name: string | null;
   branch: string | null;
   area: string | null;
   merchant_image_url?: string | null;
+  is_active?: boolean | null;
+  relationship_status?: string | null;
 };
 
-type DropRow = {
+export type DropRow = {
   id: string;
   title: string;
   description: string | null;
@@ -29,11 +49,32 @@ type DropRow = {
   validation_method: string | null;
   start_date: string | null;
   end_date: string | null;
+  max_claims?: number | string | null;
+  claim_count?: number | string | null;
+  active_claim_count?: number | string | null;
+  remaining_capacity?: number | string | null;
+  is_active?: boolean | null;
+  claim_validity_hours?: number | string | null;
+  merchant_id?: string | null;
   merchant_name?: string | null;
   merchant_branch?: string | null;
   merchant_area?: string | null;
   merchant_image_url?: string | null;
+  merchant_is_active?: boolean | null;
+  merchant_relationship_status?: string | null;
+  has_active_merchant_claim?: boolean | null;
+  already_redeemed_merchant?: boolean | null;
+  current_claim_id?: string | null;
   merchants?: MerchantRow | MerchantRow[] | null;
+};
+
+type ReceiptRow = {
+  id: string;
+  claim_id?: string | null;
+  amount_spent: number | string | null;
+  created_at: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
 };
 
 type ClaimRow = {
@@ -41,13 +82,18 @@ type ClaimRow = {
   drop_id: string;
   status: string;
   claim_code: string | null;
+  claimed_at: string | null;
   cashback_amount: number | string | null;
   amount_spent: number | string | null;
   payout_phone: string | null;
   rejected_reason: string | null;
   claim_expires_at: string | null;
   expired_at: string | null;
+  validated_at: string | null;
+  approved_at: string | null;
+  paid_at: string | null;
   drops?: DropRow | DropRow[] | null;
+  claim_receipts?: ReceiptRow | ReceiptRow[] | null;
 };
 
 type ClaimDropResult = {
@@ -66,12 +112,44 @@ type MerchantPinValidationResult = {
   error_code: string | null;
 };
 
+type SubmitReceiptResult = {
+  claim_id: string;
+  claim_status: string;
+};
+
+export type MerchantCategoryDto = {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  slug: string;
+  isPrimary: boolean;
+};
+
 export type MerchantDto = {
+  merchantId: string | null;
   name: string | null;
   branch: string | null;
   area: string | null;
   imageUrl: string | null;
+  categories: MerchantCategoryDto[];
 };
+
+export type DropViewerDto = {
+  canClaim: boolean;
+  hasActiveMerchantClaim: boolean;
+  alreadyRedeemedMerchant: boolean;
+  currentClaimId: string | null;
+};
+
+export type AvailabilityStatus =
+  | 'available'
+  | 'upcoming'
+  | 'ended'
+  | 'inactive'
+  | 'merchant_inactive'
+  | 'full'
+  | 'merchant_claim_active'
+  | 'merchant_already_redeemed';
 
 export type DropDto = {
   id: string;
@@ -82,21 +160,72 @@ export type DropDto = {
   validationMethod: string | null;
   startDate: string | null;
   endDate: string | null;
+  maxClaims: number | null;
+  claimCount: number;
+  remainingCapacity: number | null;
+  isAvailable: boolean;
+  availabilityStatus: AvailabilityStatus;
+  availabilityReason?: AvailabilityStatus;
+  claimValidityHours?: number | null;
   merchant: MerchantDto | null;
+  viewer: DropViewerDto;
+};
+
+export type ClaimReceiptDto = {
+  receiptId: string;
+  amountSpent: number | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+};
+
+export type SubmitReceiptInput = {
+  storagePath: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  amountSpent: number;
+  purchaseDate: string;
+  receiptNumber?: string | null;
+  customerNote?: string | null;
+};
+
+export type ClaimDropDto = {
+  id: string;
+  title: string;
+  description: string | null;
+  cashbackAmount: number;
+  minimumSpend: number;
+  validationMethod: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  maxClaims: number | null;
+  remainingCapacity: number | null;
 };
 
 export type ClaimDto = {
+  claimId: string;
   id: string;
   dropId: string;
   status: string;
   claimCode: string | null;
-  cashbackAmount: number | null;
-  amountSpent: number | null;
-  payoutPhone: string | null;
-  rejectedReason: string | null;
+  claimedAt: string | null;
   claimExpiresAt: string | null;
   expiredAt: string | null;
-  drop: DropDto | null;
+  validatedAt: string | null;
+  approvedAt: string | null;
+  paidAt: string | null;
+  rejectedReason: string | null;
+  amountSpent: number | null;
+  cashbackAmount: number | null;
+  payoutPhone: string | null;
+  validationMethod: string | null;
+  isExpired: boolean;
+  canClaimAgain: boolean;
+  serverNow: string;
+  drop: ClaimDropDto | null;
+  merchant: MerchantDto | null;
+  receipt?: ClaimReceiptDto | null;
 };
 
 export type RewardsServiceContext = {
@@ -106,8 +235,10 @@ export type RewardsServiceContext = {
 };
 
 export type RewardsService = {
-  listDrops(context: RewardsServiceContext): Promise<DropDto[]>;
-  getDrop(context: RewardsServiceContext & { dropId: string }): Promise<DropDto>;
+  listDrops(context: RewardsServiceContext): Promise<{ drops: DropDto[]; serverNow: string }>;
+  getDrop(
+    context: RewardsServiceContext & { dropId: string },
+  ): Promise<{ drop: DropDto; serverNow: string }>;
   claimDrop(context: RewardsServiceContext & { dropId: string }): Promise<ClaimDto>;
   listClaims(context: RewardsServiceContext): Promise<ClaimDto[]>;
   listActiveClaims(context: RewardsServiceContext): Promise<ClaimDto[]>;
@@ -122,10 +253,15 @@ export type RewardsService = {
       spendAmount: number;
     },
   ): Promise<ClaimDto>;
+  submitClaimReceipt(
+    context: RewardsServiceContext & { claimId: string; receipt: SubmitReceiptInput },
+  ): Promise<{ claim: ClaimDto; receipt: ClaimReceiptDto; serverNow: string }>;
 };
 
 const CLAIM_SELECT =
-  'id, drop_id, status, claim_code, cashback_amount, amount_spent, payout_phone, rejected_reason, claim_expires_at, expired_at, drops(id, title, description, cashback_amount, minimum_spend, validation_method, start_date, end_date, merchants(name, branch, area, merchant_image_url))';
+  'id, drop_id, status, claim_code, claimed_at, cashback_amount, amount_spent, payout_phone, rejected_reason, claim_expires_at, expired_at, validated_at, approved_at, paid_at';
+
+const CLAIM_RECEIPT_SELECT = 'claim_id, id, amount_spent, created_at, reviewed_at, rejection_reason';
 
 function createClient({ accessToken, bindings }: RewardsServiceContext) {
   return createSupabaseUserClient({
@@ -137,32 +273,57 @@ function createClient({ accessToken, bindings }: RewardsServiceContext) {
 export const rewardsService: RewardsService = {
   async listDrops(context) {
     const supabase = createClient(context);
+    const serverNow = new Date().toISOString();
 
     const { data, error } = await supabase.rpc('list_available_drops');
 
     if (error) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load drops.');
+      logSupabaseError('listDrops.list_available_drops', error);
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not load drops.');
     }
 
-    return ((data ?? []) as DropRow[]).map(toDropDto);
+    const rows = ((data ?? []) as DropRow[]).filter((row) => {
+      const remaining = nullableNumber(row.remaining_capacity);
+      return remaining === null || remaining > 0;
+    });
+    const categoriesByMerchant = await loadCategoriesByMerchantId(
+      supabase,
+      merchantIdsFromDropRows(rows),
+    );
+
+    return {
+      drops: rows.map((row) =>
+        toDropDto(row, {
+          categoriesByMerchant,
+          detail: false,
+          serverNow,
+        }),
+      ),
+      serverNow,
+    };
   },
 
   async getDrop(context) {
     const supabase = createClient(context);
-    const { data, error } = await supabase
-      .rpc('list_available_drops')
-      .eq('id', context.dropId)
-      .maybeSingle();
+    const serverNow = new Date().toISOString();
+    const row = await loadCustomerDrop({
+      dropId: context.dropId,
+      supabase,
+    });
 
-    if (error) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load drop.');
-    }
+    const categoriesByMerchant = await loadCategoriesByMerchantId(
+      supabase,
+      merchantIdsFromDropRows([row]),
+    );
 
-    if (!data) {
-      throw new AppError(404, 'DROP_NOT_FOUND', 'Drop not found.');
-    }
-
-    return toDropDto(data as DropRow);
+    return {
+      drop: toDropDto(row, {
+        categoriesByMerchant,
+        detail: true,
+        serverNow,
+      }),
+      serverNow,
+    };
   },
 
   async claimDrop(context) {
@@ -178,7 +339,7 @@ export const rewardsService: RewardsService = {
     const result = firstRow<ClaimDropResult>(data);
 
     if (!result?.claim_id) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not create claim.');
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not create claim.');
     }
 
     return loadOwnedClaim({
@@ -194,13 +355,17 @@ export const rewardsService: RewardsService = {
       .from('claims')
       .select(CLAIM_SELECT)
       .eq('user_id', context.userId)
-      .order('created_at', { ascending: false });
+      .order('claimed_at', { ascending: false });
 
     if (error) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load claims.');
+      logSupabaseError('listClaims.selectClaims', error);
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not load claims.');
     }
 
-    return ((data ?? []) as ClaimRow[]).map(toClaimDto);
+    return hydrateClaimDtos({
+      rows: (data ?? []) as ClaimRow[],
+      supabase,
+    });
   },
 
   async listActiveClaims(context) {
@@ -210,15 +375,19 @@ export const rewardsService: RewardsService = {
       .select(CLAIM_SELECT)
       .eq('user_id', context.userId)
       .in('status', [...ACTIVE_CLAIM_STATUSES])
-      .order('created_at', { ascending: false });
+      .order('claimed_at', { ascending: false });
 
     if (error) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load active claims.');
+      logSupabaseError('listActiveClaims.selectClaims', error);
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not load active claims.');
     }
 
-    return ((data ?? []) as ClaimRow[])
-      .filter((claim) => isClaimActive(claim.status, claim.claim_expires_at))
-      .map(toClaimDto);
+    return hydrateClaimDtos({
+      rows: ((data ?? []) as ClaimRow[]).filter((claim) =>
+        isClaimActive(claim.status, claim.claim_expires_at),
+      ),
+      supabase,
+    });
   },
 
   async getClaim(context) {
@@ -244,7 +413,7 @@ export const rewardsService: RewardsService = {
     const result = firstRow<SavePayoutResult>(data);
 
     if (!result?.saved_payout_phone) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not save payout phone.');
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not save payout phone.');
     }
 
     return loadOwnedClaim({
@@ -269,7 +438,7 @@ export const rewardsService: RewardsService = {
     const result = firstRow<MerchantPinValidationResult>(data);
 
     if (!result) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not verify merchant PIN.');
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not verify merchant PIN.');
     }
 
     if (!result.validation_succeeded) {
@@ -277,7 +446,7 @@ export const rewardsService: RewardsService = {
     }
 
     if (!result.claim_id) {
-      throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not verify merchant PIN.');
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not verify merchant PIN.');
     }
 
     return loadOwnedClaim({
@@ -286,7 +455,87 @@ export const rewardsService: RewardsService = {
       userId: context.userId,
     });
   },
+
+  async submitClaimReceipt(context) {
+    validateReceiptSubmissionRequest(context);
+    const supabase = createClient(context);
+    const { data, error } = await supabase.rpc('submit_claim_receipt', {
+      input_claim_id: context.claimId,
+      input_storage_path: context.receipt.storagePath,
+      input_original_filename: context.receipt.originalFilename,
+      input_mime_type: context.receipt.mimeType,
+      input_file_size_bytes: context.receipt.fileSizeBytes,
+      input_amount_spent: context.receipt.amountSpent,
+      input_purchase_date: context.receipt.purchaseDate,
+      input_receipt_number: context.receipt.receiptNumber ?? null,
+      input_customer_note: context.receipt.customerNote ?? null,
+    });
+
+    if (error) {
+      throw toReceiptSubmissionAppError(error);
+    }
+
+    const result = firstRow<SubmitReceiptResult>(data);
+    if (!result?.claim_id) {
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not submit receipt.');
+    }
+
+    const claim = await loadOwnedClaim({
+      claimId: result.claim_id,
+      supabase,
+      userId: context.userId,
+    });
+
+    if (!claim.receipt) {
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not load receipt.');
+    }
+
+    return {
+      serverNow: new Date().toISOString(),
+      claim,
+      receipt: claim.receipt,
+    };
+  },
 };
+
+export function validateReceiptSubmissionRequest({
+  claimId,
+  receipt,
+  userId,
+}: {
+  claimId: string;
+  receipt: SubmitReceiptInput;
+  userId: string;
+}) {
+  if (!ALLOWED_RECEIPT_MIME_TYPES.has(receipt.mimeType)) {
+    throw new AppError(400, 'RECEIPT_TYPE_INVALID', 'Receipt image type is not supported.');
+  }
+
+  if (!Number.isFinite(receipt.fileSizeBytes) || receipt.fileSizeBytes <= 0) {
+    throw new AppError(400, 'INVALID_RECEIPT', 'Receipt file is invalid.');
+  }
+
+  if (receipt.fileSizeBytes > MAX_RECEIPT_BYTES) {
+    throw new AppError(413, 'RECEIPT_TOO_LARGE', 'Receipt image must be 5 MB or smaller.');
+  }
+
+  if (!Number.isFinite(receipt.amountSpent) || receipt.amountSpent <= 0) {
+    throw new AppError(400, 'INVALID_RECEIPT', 'Amount spent must be greater than zero.');
+  }
+
+  if (!isIsoDate(receipt.purchaseDate)) {
+    throw new AppError(400, 'INVALID_RECEIPT', 'Purchase date is invalid.');
+  }
+
+  const expectedPrefix = `${userId}/${claimId}/`;
+  if (
+    !receipt.storagePath.startsWith(expectedPrefix) ||
+    receipt.storagePath.includes('..') ||
+    receipt.storagePath.endsWith('/')
+  ) {
+    throw new AppError(400, 'INVALID_RECEIPT', 'Receipt storage path is invalid.');
+  }
+}
 
 async function loadOwnedClaim({
   claimId,
@@ -305,34 +554,298 @@ async function loadOwnedClaim({
     .maybeSingle();
 
   if (error) {
-    throw new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not load claim.');
+    logSupabaseError('loadOwnedClaim.selectClaim', error);
+    throw new AppError(500, 'INTERNAL_ERROR', 'Could not load claim.');
   }
 
   if (!data) {
     throw new AppError(404, 'CLAIM_NOT_FOUND', 'Claim not found.');
   }
 
-  return toClaimDto(data as ClaimRow);
+  const [claim] = await hydrateClaimDtos({
+    rows: [data as ClaimRow],
+    supabase,
+  });
+
+  if (!claim) {
+    throw new AppError(404, 'CLAIM_NOT_FOUND', 'Claim not found.');
+  }
+
+  return claim;
 }
 
-function toClaimDto(row: ClaimRow): ClaimDto {
+async function hydrateClaimDtos({
+  rows,
+  supabase,
+}: {
+  rows: ClaimRow[];
+  supabase: SupabaseClient;
+}) {
+  const dropRowsById = new Map<string, DropRow>();
+  const merchantIds = new Set<string>();
+  const receiptRowsByClaimId = await loadReceiptsByClaimId(
+    supabase,
+    rows.map((row) => row.id),
+  );
+
+  await Promise.all(
+    [...new Set(rows.map((row) => row.drop_id))].map(async (dropId) => {
+      try {
+        const dropRow = await loadCustomerDrop({ dropId, supabase });
+        dropRowsById.set(dropId, dropRow);
+        const merchantId = getDropMerchantId(dropRow);
+        if (merchantId) merchantIds.add(merchantId);
+      } catch (error) {
+        if (!(error instanceof AppError && error.code === 'DROP_NOT_FOUND')) {
+          throw error;
+        }
+      }
+    }),
+  );
+
+  for (const row of rows) {
+    const fallbackDrop = row.drops ? normalizeRelation(row.drops) : null;
+    const merchantId = fallbackDrop ? getDropMerchantId(fallbackDrop) : null;
+    if (merchantId) merchantIds.add(merchantId);
+  }
+
+  const categoriesByMerchant = await loadCategoriesByMerchantId(supabase, [...merchantIds]);
+  const serverNow = new Date().toISOString();
+
+  return rows.map((row) =>
+    toClaimDto(row, {
+      categoriesByMerchant,
+      dropRow: dropRowsById.get(row.drop_id) ?? null,
+      receiptRow: receiptRowsByClaimId.get(row.id) ?? null,
+      serverNow,
+    }),
+  );
+}
+
+export async function loadCustomerDrop({
+  dropId,
+  supabase,
+}: {
+  dropId: string;
+  supabase: SupabaseClient;
+}) {
+  const { data, error } = await supabase.rpc('get_customer_drop', {
+    input_drop_id: dropId,
+  });
+
+  if (error) {
+    if (error.code === 'PGRST202' || error.message.toLowerCase().includes('get_customer_drop')) {
+      logSupabaseError('loadCustomerDrop.get_customer_drop.missing', error);
+      throw new AppError(
+        500,
+        'INTERNAL_ERROR',
+        'Customer drop detail RPC is not installed. Run the Batch 1 migration.',
+      );
+    }
+
+    logSupabaseError('loadCustomerDrop.get_customer_drop', error);
+    throw new AppError(500, 'INTERNAL_ERROR', 'Could not load drop.');
+  }
+
+  const row = firstRow<DropRow>(data);
+
+  if (!row) {
+    throw new AppError(404, 'DROP_NOT_FOUND', 'Drop not found.');
+  }
+
+  return row;
+}
+
+async function loadCategoriesByMerchantId(
+  supabase: SupabaseClient,
+  merchantIds: string[],
+): Promise<Map<string, MerchantCategoryDto[]>> {
+  const uniqueMerchantIds = [...new Set(merchantIds.filter(Boolean))];
+  const categoriesByMerchant = new Map<string, MerchantCategoryDto[]>();
+
+  if (uniqueMerchantIds.length === 0) {
+    return categoriesByMerchant;
+  }
+
+  const { data, error } = await supabase
+    .from('merchant_categories')
+    .select('merchant_id, is_primary, sort_order, categories(id, name_en, name_ar, slug, is_active)')
+    .in('merchant_id', uniqueMerchantIds)
+    .order('is_primary', { ascending: false })
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    logSupabaseError('loadCategoriesByMerchantId.selectCategories', error);
+    throw new AppError(500, 'INTERNAL_ERROR', 'Could not load merchant categories.');
+  }
+
+  for (const row of (data ?? []) as MerchantCategoryRow[]) {
+    const category = row.categories ? normalizeRelation(row.categories) : null;
+
+    if (!category || category.is_active === false) {
+      continue;
+    }
+
+    const mapped = {
+      id: category.id,
+      nameEn: category.name_en,
+      nameAr: category.name_ar,
+      slug: category.slug,
+      isPrimary: row.is_primary === true,
+    };
+    const existing = categoriesByMerchant.get(row.merchant_id) ?? [];
+    existing.push(mapped);
+    categoriesByMerchant.set(row.merchant_id, existing);
+  }
+
+  return categoriesByMerchant;
+}
+
+function toClaimDto(
+  row: ClaimRow,
+  {
+    categoriesByMerchant,
+    dropRow,
+    receiptRow,
+    serverNow,
+  }: {
+    categoriesByMerchant: Map<string, MerchantCategoryDto[]>;
+    dropRow: DropRow | null;
+    receiptRow: ReceiptRow | null;
+    serverNow: string;
+  },
+): ClaimDto {
+  const fallbackDrop = row.drops ? normalizeRelation(row.drops) : null;
+  const effectiveDrop = dropRow ?? fallbackDrop;
+  const dropDto = effectiveDrop
+    ? toDropDto(effectiveDrop, {
+        categoriesByMerchant,
+        detail: true,
+        serverNow,
+      })
+    : null;
+  const isExpired = row.status === 'expired' || isClaimReservationExpired(row.claim_expires_at);
+  const receipt = receiptRow ?? firstRelation(row.claim_receipts);
+
   return {
+    claimId: row.id,
     id: row.id,
     dropId: row.drop_id,
     status: row.status,
     claimCode: row.claim_code,
-    cashbackAmount: nullableNumber(row.cashback_amount),
-    amountSpent: nullableNumber(row.amount_spent),
-    payoutPhone: row.payout_phone,
-    rejectedReason: row.rejected_reason,
+    claimedAt: row.claimed_at,
     claimExpiresAt: row.claim_expires_at,
     expiredAt: row.expired_at,
-    drop: row.drops ? toDropDto(normalizeRelation(row.drops)) : null,
+    validatedAt: row.validated_at,
+    approvedAt: row.approved_at,
+    paidAt: row.paid_at,
+    rejectedReason: row.rejected_reason,
+    amountSpent: nullableNumber(row.amount_spent),
+    cashbackAmount: nullableNumber(row.cashback_amount),
+    payoutPhone: row.payout_phone,
+    validationMethod: effectiveDrop?.validation_method ?? null,
+    isExpired,
+    canClaimAgain: row.status === 'expired' || row.status === 'rejected' || isExpired,
+    serverNow,
+    drop: dropDto ? toClaimDropDto(dropDto) : null,
+    merchant: dropDto?.merchant ?? null,
+    receipt: receipt ? toReceiptDto(receipt) : null,
   };
 }
 
-function toDropDto(row: DropRow): DropDto {
+async function loadReceiptsByClaimId(supabase: SupabaseClient, claimIds: string[]) {
+  const uniqueClaimIds = [...new Set(claimIds.filter(Boolean))];
+  const receiptsByClaimId = new Map<string, ReceiptRow>();
+
+  if (uniqueClaimIds.length === 0) {
+    return receiptsByClaimId;
+  }
+
+  const { data, error } = await supabase
+    .from('claim_receipts')
+    .select(CLAIM_RECEIPT_SELECT)
+    .in('claim_id', uniqueClaimIds);
+
+  if (error) {
+    logSupabaseError('loadReceiptsByClaimId.selectReceipts', error);
+    throw new AppError(500, 'INTERNAL_ERROR', 'Could not load claim receipts.');
+  }
+
+  for (const receipt of (data ?? []) as ReceiptRow[]) {
+    if (receipt.claim_id) {
+      receiptsByClaimId.set(receipt.claim_id, receipt);
+    }
+  }
+
+  return receiptsByClaimId;
+}
+
+function toClaimDropDto(drop: DropDto): ClaimDropDto {
   return {
+    id: drop.id,
+    title: drop.title,
+    description: drop.description,
+    cashbackAmount: drop.cashbackAmount,
+    minimumSpend: drop.minimumSpend,
+    validationMethod: drop.validationMethod,
+    startDate: drop.startDate,
+    endDate: drop.endDate,
+    maxClaims: drop.maxClaims,
+    remainingCapacity: drop.remainingCapacity,
+  };
+}
+
+function toReceiptDto(row: ReceiptRow): ClaimReceiptDto {
+  return {
+    receiptId: row.id,
+    amountSpent: nullableNumber(row.amount_spent),
+    submittedAt: row.created_at,
+    reviewedAt: row.reviewed_at,
+    rejectionReason: row.rejection_reason,
+  };
+}
+
+export async function hydrateCustomerDropDtos({
+  rows,
+  supabase,
+  serverNow,
+  detail = true,
+}: {
+  rows: DropRow[];
+  supabase: SupabaseClient;
+  serverNow: string;
+  detail?: boolean;
+}) {
+  const categoriesByMerchant = await loadCategoriesByMerchantId(
+    supabase,
+    merchantIdsFromDropRows(rows),
+  );
+
+  return rows.map((row) =>
+    toDropDto(row, {
+      categoriesByMerchant,
+      detail,
+      serverNow,
+    }),
+  );
+}
+
+function toDropDto(
+  row: DropRow,
+  {
+    categoriesByMerchant,
+    detail,
+    serverNow,
+  }: {
+    categoriesByMerchant: Map<string, MerchantCategoryDto[]>;
+    detail: boolean;
+    serverNow: string;
+  },
+): DropDto {
+  const merchantId = getDropMerchantId(row);
+  const availability = getAvailability(row, serverNow);
+  const merchant = getDropMerchant(row, categoriesByMerchant);
+  const drop: DropDto = {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -341,13 +854,83 @@ function toDropDto(row: DropRow): DropDto {
     validationMethod: row.validation_method,
     startDate: row.start_date,
     endDate: row.end_date,
-    merchant: getDropMerchant(row),
+    maxClaims: nullableInteger(row.max_claims),
+    claimCount: nullableInteger(row.claim_count) ?? 0,
+    remainingCapacity: nullableInteger(row.remaining_capacity),
+    isAvailable: availability.isAvailable,
+    availabilityStatus: availability.status,
+    merchant,
+    viewer: {
+      canClaim: availability.status === 'available',
+      hasActiveMerchantClaim: row.has_active_merchant_claim === true,
+      alreadyRedeemedMerchant: row.already_redeemed_merchant === true,
+      currentClaimId: row.current_claim_id ?? null,
+    },
   };
+
+  if (detail) {
+    drop.availabilityReason = availability.status === 'available' ? undefined : availability.status;
+    drop.claimValidityHours = nullableInteger(row.claim_validity_hours);
+  }
+
+  if (merchant && merchant.merchantId === null && merchantId) {
+    merchant.merchantId = merchantId;
+  }
+
+  return drop;
 }
 
-function getDropMerchant(row: DropRow): MerchantDto | null {
-  if (row.merchants) return toMerchantDto(normalizeRelation(row.merchants));
+function getAvailability(
+  row: DropRow,
+  serverNow: string,
+): { status: AvailabilityStatus; isAvailable: boolean } {
+  const now = new Date(serverNow);
+  const startDate = row.start_date ? new Date(row.start_date) : null;
+  const endDate = row.end_date ? new Date(row.end_date) : null;
+  const remaining = nullableInteger(row.remaining_capacity);
+  const dropActive = row.is_active !== false;
+  const merchantActive =
+    row.merchant_is_active !== false &&
+    getMerchantRelationshipStatus(row) !== 'inactive' &&
+    row.merchant_relationship_status !== 'inactive';
+
+  if (!dropActive) return { status: 'inactive', isAvailable: false };
+  if (startDate && startDate > now) return { status: 'upcoming', isAvailable: false };
+  if (endDate && endDate < now) return { status: 'ended', isAvailable: false };
+  if (!merchantActive) return { status: 'merchant_inactive', isAvailable: false };
+
+  const factualAvailable = remaining === null || remaining > 0;
+  if (!factualAvailable) return { status: 'full', isAvailable: false };
+  if (row.has_active_merchant_claim === true) {
+    return { status: 'merchant_claim_active', isAvailable: true };
+  }
+  if (row.already_redeemed_merchant === true) {
+    return { status: 'merchant_already_redeemed', isAvailable: true };
+  }
+
+  return { status: 'available', isAvailable: true };
+}
+
+function getDropMerchant(
+  row: DropRow,
+  categoriesByMerchant = new Map<string, MerchantCategoryDto[]>(),
+): MerchantDto | null {
+  const relationMerchant = row.merchants ? normalizeRelation(row.merchants) : null;
+
+  if (relationMerchant) {
+    const merchantId = relationMerchant.id ?? row.merchant_id ?? null;
+    return {
+      merchantId,
+      name: relationMerchant.name,
+      branch: relationMerchant.branch,
+      area: relationMerchant.area,
+      imageUrl: relationMerchant.merchant_image_url ?? null,
+      categories: merchantId ? categoriesByMerchant.get(merchantId) ?? [] : [],
+    };
+  }
+
   if (
+    row.merchant_id === undefined &&
     row.merchant_name === undefined &&
     row.merchant_branch === undefined &&
     row.merchant_area === undefined &&
@@ -356,29 +939,49 @@ function getDropMerchant(row: DropRow): MerchantDto | null {
     return null;
   }
 
+  const merchantId = row.merchant_id ?? null;
   return {
+    merchantId,
     name: row.merchant_name ?? null,
     branch: row.merchant_branch ?? null,
     area: row.merchant_area ?? null,
     imageUrl: row.merchant_image_url ?? null,
+    categories: merchantId ? categoriesByMerchant.get(merchantId) ?? [] : [],
   };
 }
 
-function toMerchantDto(row: MerchantRow): MerchantDto {
-  return {
-    name: row.name,
-    branch: row.branch,
-    area: row.area,
-    imageUrl: row.merchant_image_url ?? null,
-  };
+function getDropMerchantId(row: DropRow): string | null {
+  if (row.merchant_id) return row.merchant_id;
+  const relationMerchant = row.merchants ? normalizeRelation(row.merchants) : null;
+  return relationMerchant?.id ?? null;
+}
+
+function getMerchantRelationshipStatus(row: DropRow): string | null {
+  if (row.merchant_relationship_status) return row.merchant_relationship_status;
+  const relationMerchant = row.merchants ? normalizeRelation(row.merchants) : null;
+  return relationMerchant?.relationship_status ?? null;
+}
+
+function merchantIdsFromDropRows(rows: DropRow[]) {
+  return rows.map(getDropMerchantId).filter((merchantId): merchantId is string => Boolean(merchantId));
 }
 
 function normalizeRelation<T>(value: T | T[]): T {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function nullableNumber(value: number | string | null) {
-  return value === null ? null : Number(value);
+function firstRelation<T>(value?: T | T[] | null): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function nullableNumber(value: number | string | null | undefined) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function nullableInteger(value: number | string | null | undefined) {
+  const number = nullableNumber(value);
+  return number === null || Number.isNaN(number) ? null : Math.trunc(number);
 }
 
 function firstRow<T>(data: unknown): T | null {
@@ -387,6 +990,22 @@ function firstRow<T>(data: unknown): T | null {
   }
 
   return (data as T | null) ?? null;
+}
+
+function logSupabaseError(operation: string, error: PostgrestError) {
+  console.error('Unexpected Supabase error', {
+    operation,
+    code: error.code,
+    message: error.message,
+    details: error.details || undefined,
+    hint: error.hint || undefined,
+  });
+}
+
+function isClaimReservationExpired(claimExpiresAt: string | null, now = new Date()) {
+  if (!claimExpiresAt) return false;
+  const expiresAt = new Date(claimExpiresAt);
+  return !Number.isNaN(expiresAt.getTime()) && expiresAt <= now;
 }
 
 function isClaimActive(status: string, claimExpiresAt: string | null, now = new Date()) {
@@ -407,11 +1026,17 @@ function isClaimActive(status: string, claimExpiresAt: string | null, now = new 
   return expiresAt > now;
 }
 
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && value === parsed.toISOString().slice(0, 10);
+}
+
 function toClaimDropAppError(error: PostgrestError) {
   const message = error.message.toLowerCase();
 
   if (error.code === '42501' || message.includes('authentication')) {
-    return new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+    return new AppError(401, 'AUTH_REQUIRED', 'Authentication required.');
   }
 
   if (error.code === 'P0002' || message.includes('not found')) {
@@ -435,7 +1060,7 @@ function toClaimDropAppError(error: PostgrestError) {
   }
 
   if (error.code === '23505' || message.includes('existing active claim')) {
-    return new AppError(409, 'ALREADY_CLAIMED', 'Active claim already exists.');
+    return new AppError(409, 'MERCHANT_CLAIM_ACTIVE', 'Active claim already exists.');
   }
 
   if (message.includes('fully claimed')) {
@@ -443,7 +1068,7 @@ function toClaimDropAppError(error: PostgrestError) {
   }
 
   if (message.includes('no longer available') || message.includes('expired')) {
-    return new AppError(410, 'DROP_EXPIRED', 'Drop is no longer available.');
+    return new AppError(410, 'DROP_UNAVAILABLE', 'Drop is no longer available.');
   }
 
   if (
@@ -451,10 +1076,10 @@ function toClaimDropAppError(error: PostgrestError) {
     message.includes('not available yet') ||
     message.includes('unavailable')
   ) {
-    return new AppError(409, 'DROP_INACTIVE', 'Drop is currently unavailable.');
+    return new AppError(409, 'DROP_UNAVAILABLE', 'Drop is currently unavailable.');
   }
 
-  return new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not create claim.');
+  return new AppError(500, 'INTERNAL_ERROR', 'Could not create claim.');
 }
 
 function toPayoutPhoneAppError(error: PostgrestError) {
@@ -465,21 +1090,17 @@ function toPayoutPhoneAppError(error: PostgrestError) {
   }
 
   if (error.code === '42501' || message.includes('authentication')) {
-    return new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+    return new AppError(401, 'AUTH_REQUIRED', 'Authentication required.');
   }
 
   if (error.code === '23514' || message.includes('valid bahrain benefitpay')) {
-    return new AppError(
-      400,
-      'INVALID_PAYOUT_PHONE',
-      'A valid Bahrain BenefitPay number is required.',
-    );
+    return new AppError(400, 'INVALID_PHONE', 'A valid Bahrain BenefitPay number is required.');
   }
 
   if (error.code === '23505' || message.includes('already linked')) {
     return new AppError(
       409,
-      'PAYOUT_PHONE_IN_USE',
+      'BENEFITPAY_IN_USE',
       'This BenefitPay number is already linked to another account.',
     );
   }
@@ -488,17 +1109,99 @@ function toPayoutPhoneAppError(error: PostgrestError) {
     return new AppError(409, 'CLAIM_NOT_ACTIVE', 'Claim can no longer be updated.');
   }
 
-  return new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not save payout phone.');
+  return new AppError(500, 'INTERNAL_ERROR', 'Could not save payout phone.');
+}
+
+export function toReceiptSubmissionAppError(error: PostgrestError) {
+  const message = error.message.toLowerCase();
+
+  if (message.includes('not found for this account') || message.includes('claim not found')) {
+    return new AppError(404, 'CLAIM_NOT_FOUND', 'Claim not found.');
+  }
+
+  if (error.code === '42501' || message.includes('authentication')) {
+    return new AppError(401, 'AUTH_REQUIRED', 'Authentication required.');
+  }
+
+  if (error.code === 'P0002' && message.includes('upload')) {
+    return new AppError(404, 'RECEIPT_UPLOAD_NOT_FOUND', 'Receipt upload was not found.');
+  }
+
+  if (error.code === 'P0002') {
+    return new AppError(404, 'CLAIM_NOT_FOUND', 'Claim not found.');
+  }
+
+  if (message.includes('claim_expired')) {
+    return new AppError(410, 'CLAIM_EXPIRED', 'This claim reservation has expired.');
+  }
+
+  if (message.includes('can only be submitted') || message.includes('claimed reward')) {
+    return new AppError(409, 'CLAIM_NOT_ACTIVE', 'Receipt can only be submitted for an active claim.');
+  }
+
+  if (message.includes('payout phone')) {
+    return new AppError(
+      409,
+      'MISSING_PAYOUT_PHONE',
+      'A payout phone is required before receipt submission.',
+    );
+  }
+
+  if (message.includes('does not accept receipt upload')) {
+    return new AppError(
+      409,
+      'WRONG_VALIDATION_METHOD',
+      'This reward does not accept receipt upload.',
+    );
+  }
+
+  if (message.includes('minimum spend')) {
+    return new AppError(
+      400,
+      'AMOUNT_BELOW_MINIMUM',
+      'The amount spent does not meet the minimum spend.',
+    );
+  }
+
+  if (message.includes('purchase date')) {
+    return new AppError(400, 'INVALID_RECEIPT', 'Purchase date is invalid for this reward.');
+  }
+
+  if (message.includes('unsupported receipt file type')) {
+    return new AppError(400, 'RECEIPT_TYPE_INVALID', 'Receipt image type is not supported.');
+  }
+
+  if (message.includes('too large')) {
+    return new AppError(413, 'RECEIPT_TOO_LARGE', 'Receipt image must be 5 MB or smaller.');
+  }
+
+  if (message.includes('invalid receipt storage path')) {
+    return new AppError(400, 'INVALID_RECEIPT', 'Receipt storage path is invalid.');
+  }
+
+  if (error.code === '23505' || message.includes('already submitted')) {
+    return new AppError(
+      409,
+      'RECEIPT_ALREADY_SUBMITTED',
+      'A receipt has already been submitted for this claim.',
+    );
+  }
+
+  if (message.includes('unavailable') || message.includes('no longer available')) {
+    return new AppError(409, 'DROP_UNAVAILABLE', 'Drop is currently unavailable.');
+  }
+
+  return new AppError(500, 'INTERNAL_ERROR', 'Could not submit receipt.');
 }
 
 function toMerchantPinRpcAppError(error: PostgrestError) {
   const message = error.message.toLowerCase();
 
   if (error.code === '42501' || message.includes('authentication')) {
-    return new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+    return new AppError(401, 'AUTH_REQUIRED', 'Authentication required.');
   }
 
-  return new AppError(500, 'INTERNAL_SERVER_ERROR', 'Could not verify merchant PIN.');
+  return new AppError(500, 'INTERNAL_ERROR', 'Could not verify merchant PIN.');
 }
 
 function toMerchantPinValidationAppError(errorCode: string | null) {
@@ -523,7 +1226,7 @@ function toMerchantPinValidationAppError(errorCode: string | null) {
   }
 
   if (errorCode === 'claim_already_validated') {
-    return new AppError(409, 'CLAIM_ALREADY_VERIFIED', 'This claim has already been verified.');
+    return new AppError(409, 'CLAIM_NOT_ACTIVE', 'This claim has already been verified.');
   }
 
   if (errorCode === 'claim_not_found' || errorCode === 'claim_not_owned') {
@@ -543,16 +1246,16 @@ function toMerchantPinValidationAppError(errorCode: string | null) {
   }
 
   if (errorCode === 'wrong_validation_method') {
-    return new AppError(409, 'INVALID_CLAIM_STATE', 'This claim does not use merchant PIN.');
+    return new AppError(409, 'CLAIM_NOT_ACTIVE', 'This claim does not use merchant PIN.');
   }
 
   if (errorCode === 'reward_expired') {
-    return new AppError(410, 'DROP_EXPIRED', 'Drop is no longer available.');
+    return new AppError(410, 'DROP_UNAVAILABLE', 'Drop is no longer available.');
   }
 
   if (errorCode === 'reward_unavailable') {
-    return new AppError(409, 'DROP_INACTIVE', 'Drop is currently unavailable.');
+    return new AppError(409, 'DROP_UNAVAILABLE', 'Drop is currently unavailable.');
   }
 
-  return new AppError(409, 'INVALID_CLAIM_STATE', 'Claim could not be verified.');
+  return new AppError(409, 'CLAIM_NOT_ACTIVE', 'Claim could not be verified.');
 }
