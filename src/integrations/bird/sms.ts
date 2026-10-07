@@ -1,7 +1,5 @@
 export type BirdSmsConfig = {
   accessKey: string;
-  workspaceId: string;
-  channelId: string;
 };
 
 export type BirdSmsAccepted = {
@@ -38,8 +36,6 @@ export type BirdSmsErrorDiagnostics = {
   birdReference: string | null;
   birdRequestId: string | null;
   rawBodySnippet: string | null;
-  workspaceId: string;
-  channelId: string;
   destination: string;
 };
 
@@ -69,10 +65,20 @@ export function normalizeBahrainPhone(value: string): string {
   return canonical;
 }
 
-export function createBirdSmsUrl(config: Pick<BirdSmsConfig, 'workspaceId' | 'channelId'>) {
-  return `https://api.bird.com/workspaces/${encodeURIComponent(
-    config.workspaceId,
-  )}/channels/${encodeURIComponent(config.channelId)}/messages`;
+function createBirdSmsUrl(accessKey: string) {
+  if (accessKey.startsWith('bk_eu1_')) {
+    return 'https://eu1.platform.bird.com/v1/sms/messages';
+  }
+
+  if (accessKey.startsWith('bk_us1_')) {
+    return 'https://us1.platform.bird.com/v1/sms/messages';
+  }
+
+  throw new BirdSmsError(
+    'configuration',
+    null,
+    'Unsupported Bird API key region.',
+  );
 }
 
 export function createBirdSmsPayload(input: {
@@ -80,19 +86,10 @@ export function createBirdSmsPayload(input: {
   messageText: string;
 }) {
   return {
-    receiver: {
-      contacts: [
-        {
-          identifierValue: input.canonicalPhone,
-        },
-      ],
-    },
-    body: {
-      type: 'text',
-      text: {
-        text: input.messageText,
-      },
-    },
+    to: input.canonicalPhone,
+    from: 'Jareb',
+    text: input.messageText,
+    category: 'authentication',
   };
 }
 
@@ -108,12 +105,12 @@ export function createBirdSmsClient({
   return {
     async sendVerificationSms({ phone, code }) {
       const canonicalPhone = normalizeBahrainPhone(phone);
-      const url = createBirdSmsUrl(config);
+      const url = createBirdSmsUrl(config.accessKey);
       const messageText = `Your Jareb verification code is ${code}`;
       const body = createBirdSmsPayload({ canonicalPhone, messageText });
       const serializedBody = JSON.stringify(body);
       const headers = {
-        Authorization: `AccessKey ${config.accessKey}`,
+        Authorization: `Bearer ${config.accessKey}`,
         'Content-Type': 'application/json',
       };
 
@@ -121,16 +118,14 @@ export function createBirdSmsClient({
       try {
         console.info('Bird SMS request diagnostics', {
           bodyShape: {
-            'body.text.text': body.body.text.text.trim() ? 'present' : 'missing',
-            'body.type': body.body.type,
-            'receiver.contacts[0].identifierValue': body.receiver.contacts[0]
-              ?.identifierValue
-              ? 'present'
-              : 'missing',
+            category: body.category,
+            from: body.from ? 'present' : 'missing',
+            text: body.text.trim() ? 'present' : 'missing',
+            to: body.to ? 'present' : 'missing',
           },
           contentType: headers['Content-Type'],
           destination: maskBahrainPhone(canonicalPhone),
-          hasAuthorization: headers.Authorization.trim().length > 'AccessKey '.length,
+          hasAuthorization: headers.Authorization.trim().length > 'Bearer '.length,
           method: 'POST',
           serializedJsonLength: serializedBody.length,
           url,
@@ -165,10 +160,8 @@ export function createBirdSmsClient({
       }
 
       const diagnostics = await readBirdErrorDiagnostics({
-        channelId: config.channelId,
         destination: canonicalPhone,
         response,
-        workspaceId: config.workspaceId,
       });
       throw toBirdSmsError(response.status, diagnostics);
     },
@@ -240,15 +233,11 @@ function readString(payload: Record<string, unknown>, key: string): string | nul
 }
 
 async function readBirdErrorDiagnostics({
-  channelId,
   destination,
   response,
-  workspaceId,
 }: {
-  channelId: string;
   destination: string;
   response: Response;
-  workspaceId: string;
 }): Promise<BirdSmsErrorDiagnostics> {
   const rawBody = await response.text().catch(() => '');
   const parsedBody = parseJsonText(rawBody);
@@ -279,9 +268,7 @@ async function readBirdErrorDiagnostics({
       response.headers.get('x-bird-request-id') ??
       pickString(parsedBody, ['request_id', 'requestId', 'error.request_id']),
     rawBodySnippet: sanitizeDiagnosticString(rawBody.slice(0, 500)),
-    channelId,
     destination: maskBahrainPhone(destination),
-    workspaceId,
   };
 }
 
@@ -360,7 +347,8 @@ function sanitizeDiagnosticString(value: string | null): string | null {
   return value
     .replace(/\+973(\d{4})(\d{4})/g, '+973****$2')
     .replace(/\b\d{6}\b/g, '[redacted-code]')
-    .replace(/AccessKey\s+\S+/gi, 'AccessKey [redacted]');
+    .replace(/AccessKey\s+\S+/gi, 'AccessKey [redacted]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]');
 }
 
 function maskBahrainPhone(value: string) {

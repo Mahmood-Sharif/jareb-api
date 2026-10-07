@@ -4,9 +4,7 @@ import { createApp } from '../src/index';
 import { BirdSmsError, createBirdSmsClient } from '../src/integrations/bird/sms';
 
 const birdConfig = {
-  accessKey: 'bird_access_key',
-  workspaceId: '4140282d-f74a-443d-b50e-44106d5a5693',
-  channelId: '84c2f52d-122c-530e-83d2-b0bc9fb4ed7b',
+  accessKey: 'bk_eu1_test_access_key',
 };
 
 const hookSecret = `v1,whsec_${bytesToBase64(new TextEncoder().encode('hook-secret'))}`;
@@ -32,10 +30,10 @@ describe('Bird SMS client', () => {
       status: 'accepted',
     });
     expect(fetcher).toHaveBeenCalledWith(
-      'https://api.bird.com/workspaces/4140282d-f74a-443d-b50e-44106d5a5693/channels/84c2f52d-122c-530e-83d2-b0bc9fb4ed7b/messages',
+      'https://eu1.platform.bird.com/v1/sms/messages',
       expect.objectContaining({
         headers: {
-          Authorization: 'AccessKey bird_access_key',
+          Authorization: 'Bearer bk_eu1_test_access_key',
           'Content-Type': 'application/json',
         },
         method: 'POST',
@@ -45,20 +43,36 @@ describe('Bird SMS client', () => {
     const calls = fetcher.mock.calls as unknown as [string, RequestInit][];
     const request = calls[0][1];
     expect(JSON.parse(request.body as string)).toEqual({
-      receiver: {
-        contacts: [
-          {
-            identifierValue: '+97336000001',
-          },
-        ],
-      },
-      body: {
-        type: 'text',
-        text: {
-          text: 'Your Jareb verification code is 123456',
-        },
-      },
+      to: '+97336000001',
+      from: 'Jareb',
+      text: 'Your Jareb verification code is 123456',
+      category: 'authentication',
     });
+  });
+
+  it('routes us1 Bird keys to the US SMS endpoint', async () => {
+    const fetcher = vi.fn(async () => Response.json({}, { status: 202 }));
+    const client = createBirdSmsClient({
+      config: {
+        accessKey: 'bk_us1_test_access_key',
+      },
+      fetcher,
+      timeoutMs: 1000,
+    });
+
+    await client.sendVerificationSms({
+      code: '123456',
+      phone: '+97336000001',
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://us1.platform.bird.com/v1/sms/messages',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer bk_us1_test_access_key',
+        }),
+      }),
+    );
   });
 
   it.each([
@@ -113,7 +127,7 @@ describe('Bird SMS client', () => {
             code: 'InvalidReceiver',
             message: 'Invalid phone +97336009655 for OTP 123456.',
             details: {
-              field: 'receiver.contacts.0.identifierValue',
+              field: 'to',
               value: '+97336009655',
             },
             request_id: 'req_123',
@@ -140,18 +154,16 @@ describe('Bird SMS client', () => {
         birdCode: 'InvalidReceiver',
         birdMessage: 'Invalid phone +973****9655 for OTP [redacted-code].',
         birdDetails: {
-          field: 'receiver.contacts.0.identifierValue',
+          field: 'to',
           value: '+973****9655',
         },
         birdReference: null,
         birdRequestId: 'req_header_123',
-        channelId: birdConfig.channelId,
         destination: '+973****9655',
         rawBodySnippet:
-          '{"code":"InvalidReceiver","message":"Invalid phone +973****9655 for OTP [redacted-code].","details":{"field":"receiver.contacts.0.identifierValue","value":"+973****9655"},"request_id":"req_123"}',
+          '{"code":"InvalidReceiver","message":"Invalid phone +973****9655 for OTP [redacted-code].","details":{"field":"to","value":"+973****9655"},"request_id":"req_123"}',
         responseContentType: 'application/json',
         status: 400,
-        workspaceId: birdConfig.workspaceId,
       },
       kind: 'recipient',
       statusCode: 400,
@@ -397,17 +409,15 @@ describe('POST /auth/hooks/send-sms', () => {
             throw new BirdSmsError('recipient', 400, 'Bird SMS recipient request failed.', {
               birdCode: 'InvalidReceiver',
               birdDetails: {
-                field: 'receiver.contacts.0.identifierValue',
+                field: 'to',
               },
               birdMessage: 'Invalid receiver',
               birdReference: 'ref_123',
               birdRequestId: 'req_123',
-              channelId: birdConfig.channelId,
               destination: '+973****9655',
               rawBodySnippet: 'Invalid receiver +973****9655 OTP [redacted-code]',
               responseContentType: 'text/plain',
               status: 400,
-              workspaceId: birdConfig.workspaceId,
             });
           }),
         },
@@ -428,7 +438,7 @@ describe('POST /auth/hooks/send-sms', () => {
       expect(logs).toContain('InvalidReceiver');
       expect(logs).toContain('+973****9655');
       expect(logs).not.toContain('123456');
-      expect(logs).not.toContain('bird_access_key');
+      expect(logs).not.toContain('bk_eu1_test_access_key');
       expect(logs).not.toContain('+97336009655');
     } finally {
       consoleWarn.mockRestore();
