@@ -12,6 +12,8 @@ const workerEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   ACCOUNT_IDENTITY_HMAC_SECRET: z.string().min(1).optional(),
   BIRD_ACCESS_KEY: z.string().min(1).optional(),
+  BIRD_WORKSPACE_ID: z.string().min(1).optional(),
+  BIRD_CHANNEL_ID: z.string().min(1).optional(),
   SEND_SMS_HOOK_SECRET: z.string().min(1).optional(),
   TARABUT_CLIENT_ID: z.string().min(1).optional(),
   TARABUT_CLIENT_SECRET: z.string().min(1).optional(),
@@ -85,7 +87,7 @@ export function getAccountIdentityHmacSecret(bindings: Partial<Bindings> = {}) {
 export function getBirdSmsConfig(bindings: Partial<Bindings> = {}) {
   const env = parseWorkerEnv(bindings);
 
-  if (!env.BIRD_ACCESS_KEY) {
+  if (!env.BIRD_ACCESS_KEY || !env.BIRD_WORKSPACE_ID || !env.BIRD_CHANNEL_ID) {
     throw new AppError(
       500,
       'CONFIGURATION_ERROR',
@@ -95,6 +97,8 @@ export function getBirdSmsConfig(bindings: Partial<Bindings> = {}) {
 
   return {
     accessKey: env.BIRD_ACCESS_KEY,
+    workspaceId: env.BIRD_WORKSPACE_ID,
+    channelId: env.BIRD_CHANNEL_ID,
   };
 }
 
