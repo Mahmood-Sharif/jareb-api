@@ -104,19 +104,20 @@ export function createBirdSmsClient({
 }): BirdSmsClient {
   return {
     async sendVerificationSms({ phone, code }) {
+      const accessKey = config.accessKey.trim();
       const canonicalPhone = normalizeBahrainPhone(phone);
-      const url = createBirdSmsUrl(config.accessKey);
+      const url = createBirdSmsUrl(accessKey);
       const messageText = `Your Jareb verification code is ${code}`;
       const body = createBirdSmsPayload({ canonicalPhone, messageText });
       const serializedBody = JSON.stringify(body);
       const headers = {
-        Authorization: `Bearer ${config.accessKey}`,
+        Authorization: `Bearer ${accessKey}`,
         'Content-Type': 'application/json',
       };
 
       let response: Response;
       try {
-        console.info('Bird SMS request diagnostics', {
+        console.info('Bird SMS request started', {
           bodyShape: {
             category: body.category,
             from: body.from ? 'present' : 'missing',
@@ -141,7 +142,7 @@ export function createBirdSmsClient({
       }
 
       const responseBodyForDiagnostics = await response.clone().text().catch(() => '');
-      console.info('Bird SMS response diagnostics', {
+      console.info('Bird SMS response received', {
         rawBodyLength: responseBodyForDiagnostics.length,
         rawBodySnippet:
           responseBodyForDiagnostics.length > 0

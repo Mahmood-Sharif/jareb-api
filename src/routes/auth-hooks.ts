@@ -30,6 +30,12 @@ export function createAuthHooksRoutes({
   const routes = new Hono<AppEnv>();
 
   routes.post('/send-sms', async (c) => {
+    console.info('SMS HOOK request received', {
+      contentType: c.req.header('content-type') ?? null,
+      hasSignature: Boolean(c.req.header('webhook-signature')),
+      path: c.req.path,
+    });
+
     const body = await c.req.text();
 
     try {
@@ -38,11 +44,21 @@ export function createAuthHooksRoutes({
         headers: c.req.raw.headers,
         secret: getSendSmsHookSecret(c.env),
       });
+      console.info('SMS HOOK signature verified');
 
-      const parsedPayload = sendSmsHookPayloadSchema.safeParse(JSON.parse(body));
+      const payload = parseJsonBody(body);
+      const parsedPayload = sendSmsHookPayloadSchema.safeParse(payload);
       if (!parsedPayload.success) {
+        console.warn('SMS HOOK payload invalid', {
+          issues: parsedPayload.error.issues.map((issue) => issue.path.join('.')),
+        });
         throw new AppError(400, 'BAD_REQUEST', 'Invalid Send SMS hook payload.');
       }
+      console.info('SMS HOOK payload parsed', {
+        hasNewPhone: Boolean(parsedPayload.data.user.new_phone?.trim()),
+        hasOtp: Boolean(parsedPayload.data.sms.otp),
+        hasPhone: Boolean(parsedPayload.data.user.phone?.trim()),
+      });
 
       const rawNewPhone = parsedPayload.data.user.new_phone?.trim();
       const rawCurrentPhone = parsedPayload.data.user.phone?.trim();
@@ -56,17 +72,16 @@ export function createAuthHooksRoutes({
       }
       const source = rawNewPhone ? 'new_phone' : 'phone';
       const normalizedDestination = normalizeBahrainPhone(destination);
+      console.info('SMS HOOK destination normalized', {
+        destination: maskBahrainPhone(normalizedDestination),
+        source,
+      });
 
       const client =
         birdSmsClient ??
         createBirdSmsClient({
           config: getBirdSmsConfig(c.env),
         });
-
-      console.info('SMS HOOK destination', {
-        destination: maskBahrainPhone(normalizedDestination),
-        source,
-      });
 
       const result = await client.sendVerificationSms({
         code: parsedPayload.data.sms.otp,
@@ -82,6 +97,9 @@ export function createAuthHooksRoutes({
       return c.json({}, 200);
     } catch (error) {
       const hookError = toSendSmsHookError(error);
+      if (error instanceof AppError && error.code === 'UNAUTHORIZED') {
+        console.warn('SMS HOOK signature verification failed');
+      }
 
       console.warn('Bird SMS delivery failed', {
         bird: error instanceof BirdSmsError ? error.diagnostics : null,
@@ -102,6 +120,15 @@ export function createAuthHooksRoutes({
   });
 
   return routes;
+}
+
+function parseJsonBody(body: string) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    console.warn('SMS HOOK JSON parse failed');
+    throw new AppError(400, 'BAD_REQUEST', 'Invalid Send SMS hook payload.');
+  }
 }
 
 function toSendSmsHookError(error: unknown): {

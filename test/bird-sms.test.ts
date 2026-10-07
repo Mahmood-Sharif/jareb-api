@@ -75,6 +75,53 @@ describe('Bird SMS client', () => {
     );
   });
 
+  it('trims Bird access keys before region routing and authorization', async () => {
+    const fetcher = vi.fn(async () => Response.json({}, { status: 202 }));
+    const client = createBirdSmsClient({
+      config: {
+        accessKey: '  bk_eu1_test_access_key  ',
+      },
+      fetcher,
+      timeoutMs: 1000,
+    });
+
+    await client.sendVerificationSms({
+      code: '123456',
+      phone: '+97336000001',
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://eu1.platform.bird.com/v1/sms/messages',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer bk_eu1_test_access_key',
+        }),
+      }),
+    );
+  });
+
+  it('rejects unsupported Bird API key regions before calling Bird', async () => {
+    const fetcher = vi.fn();
+    const client = createBirdSmsClient({
+      config: {
+        accessKey: 'bk_ap1_test_access_key',
+      },
+      fetcher,
+      timeoutMs: 1000,
+    });
+
+    await expect(
+      client.sendVerificationSms({
+        code: '123456',
+        phone: '+97336000001',
+      }),
+    ).rejects.toMatchObject({
+      kind: 'configuration',
+      statusCode: null,
+    } satisfies Partial<BirdSmsError>);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it.each([
     [401, 'authentication'],
     [403, 'authentication'],
@@ -116,6 +163,30 @@ describe('Bird SMS client', () => {
       statusCode: 400,
     } satisfies Partial<BirdSmsError>);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['36000001', '+97336000001'],
+    ['97336000001', '+97336000001'],
+    ['+973 3600 0001', '+97336000001'],
+  ])('normalizes Bahrain phone value %s', async (inputPhone, expectedPhone) => {
+    const fetcher = vi.fn(async () => Response.json({}, { status: 202 }));
+    const client = createBirdSmsClient({
+      config: birdConfig,
+      fetcher,
+      timeoutMs: 1000,
+    });
+
+    await client.sendVerificationSms({
+      code: '123456',
+      phone: inputPhone,
+    });
+
+    const calls = fetcher.mock.calls as unknown as [string, RequestInit][];
+    const request = calls[0][1];
+    expect(JSON.parse(request.body as string)).toMatchObject({
+      to: expectedPhone,
+    });
   });
 
   it('captures sanitized Bird 400 diagnostics without OTPs or access keys', async () => {
@@ -344,6 +415,105 @@ describe('POST /auth/hooks/send-sms', () => {
       error: {
         http_code: 400,
         message: 'Unable to send verification SMS.',
+      },
+    });
+  });
+
+  it('rejects malformed Send SMS hook payloads before sending SMS', async () => {
+    const sendVerificationSms = vi.fn();
+    const body = JSON.stringify({
+      user: {
+        phone: '+97336000001',
+      },
+      sms: {},
+    });
+
+    const response = await createApp({
+      birdSmsClient: {
+        sendVerificationSms,
+      },
+    }).request(
+      '/auth/hooks/send-sms',
+      {
+        body,
+        headers: await signedHookHeaders(body),
+        method: 'POST',
+      },
+      {
+        SEND_SMS_HOOK_SECRET: hookSecret,
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(sendVerificationSms).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        http_code: 400,
+        message: 'Unable to send verification SMS.',
+      },
+    });
+  });
+
+  it('rejects invalid JSON before sending SMS', async () => {
+    const sendVerificationSms = vi.fn();
+    const body = '{not json';
+
+    const response = await createApp({
+      birdSmsClient: {
+        sendVerificationSms,
+      },
+    }).request(
+      '/auth/hooks/send-sms',
+      {
+        body,
+        headers: await signedHookHeaders(body),
+        method: 'POST',
+      },
+      {
+        SEND_SMS_HOOK_SECRET: hookSecret,
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(sendVerificationSms).not.toHaveBeenCalled();
+  });
+
+  it('rejects bad hook signatures before sending SMS', async () => {
+    const sendVerificationSms = vi.fn();
+    const body = JSON.stringify({
+      user: {
+        phone: '+97336000001',
+      },
+      sms: {
+        otp: '123456',
+      },
+    });
+
+    const headers = await signedHookHeaders(body);
+    headers['webhook-signature'] = 'v1,bad_signature';
+
+    const response = await createApp({
+      birdSmsClient: {
+        sendVerificationSms,
+      },
+    }).request(
+      '/auth/hooks/send-sms',
+      {
+        body,
+        headers,
+        method: 'POST',
+      },
+      {
+        SEND_SMS_HOOK_SECRET: hookSecret,
+      },
+    );
+
+    expect(response.status).toBe(401);
+    expect(sendVerificationSms).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        http_code: 401,
+        message: 'Invalid hook signature.',
       },
     });
   });
