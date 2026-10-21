@@ -19,12 +19,14 @@ export async function sendPushToUser({
   bindings,
   message,
   userId,
+  client,
 }: {
   bindings: Bindings;
   message: PushMessage;
   userId: string;
+  client?: FirebasePushClient;
 }) {
-  return sendToDevices({ bindings, message, userId });
+  return sendToDevices({ bindings, message, userId, client });
 }
 
 // Internal-only helper for scheduled/admin jobs. It is intentionally not
@@ -32,11 +34,13 @@ export async function sendPushToUser({
 export async function broadcastPushToActiveDevices({
   bindings,
   message,
+  client,
 }: {
   bindings: Bindings;
   message: PushMessage;
+  client?: FirebasePushClient;
 }) {
-  return sendToDevices({ bindings, message });
+  return sendToDevices({ bindings, message, client });
 }
 
 async function sendToDevices({

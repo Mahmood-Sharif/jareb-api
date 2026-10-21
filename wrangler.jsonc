@@ -3,6 +3,9 @@
   "name": "jareb-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-15",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "vars": {
     "ENVIRONMENT": "production",
     "ALLOWED_ORIGINS": "https://jareb.app,https://www.jareb.app,https://jareb-customer-web.mahmood-dc7.workers.dev"

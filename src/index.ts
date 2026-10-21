@@ -18,7 +18,8 @@ import {
   type SavedDropsService,
 } from './services/saved-drops';
 import { walletService as defaultWalletService, type WalletService } from './services/wallet';
-import type { AppEnv } from './types/app';
+import { dispatchPushEvents } from './services/push-events';
+import type { AppEnv, Bindings } from './types/app';
 
 export function createApp({
   deleteAccount,
@@ -75,4 +76,15 @@ export function createApp({
   return app;
 }
 
-export default createApp();
+const app = createApp();
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      dispatchPushEvents({ bindings: env })
+        .then((summary) => console.log('Push events dispatched', summary))
+        .catch((error) => console.error('Push event dispatch failed', error)),
+    );
+  },
+};
