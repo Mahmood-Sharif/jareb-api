@@ -12,6 +12,9 @@ export type Bindings = {
   BIRD_WORKSPACE_ID?: string;
   BIRD_CHANNEL_ID?: string;
   SEND_SMS_HOOK_SECRET?: string;
+  FIREBASE_PROJECT_ID?: string;
+  FIREBASE_CLIENT_EMAIL?: string;
+  FIREBASE_PRIVATE_KEY?: string;
   TARABUT_CLIENT_ID?: string;
   TARABUT_CLIENT_SECRET?: string;
   TARABUT_OAUTH_URL?: string;

@@ -55,6 +55,7 @@ export type DropRow = {
   remaining_capacity?: number | string | null;
   is_active?: boolean | null;
   claim_validity_hours?: number | string | null;
+  availability_status?: string | null;
   merchant_id?: string | null;
   merchant_name?: string | null;
   merchant_branch?: string | null;
@@ -235,7 +236,11 @@ export type RewardsServiceContext = {
 };
 
 export type RewardsService = {
-  listDrops(context: RewardsServiceContext): Promise<{ drops: DropDto[]; serverNow: string }>;
+  listDrops(context: RewardsServiceContext): Promise<{
+    drops: DropDto[];
+    recentUnavailableDrop: DropDto | null;
+    serverNow: string;
+  }>;
   getDrop(
     context: RewardsServiceContext & { dropId: string },
   ): Promise<{ drop: DropDto; serverNow: string }>;
@@ -286,9 +291,23 @@ export const rewardsService: RewardsService = {
       const remaining = nullableNumber(row.remaining_capacity);
       return remaining === null || remaining > 0;
     });
+    let recentUnavailableRow: DropRow | null = null;
+    if (rows.length === 0) {
+      const { data: recentData, error: recentError } = await supabase.rpc(
+        'get_recent_unavailable_drop',
+      );
+      if (recentError) {
+        logSupabaseError('listDrops.get_recent_unavailable_drop', recentError);
+        throw new AppError(500, 'INTERNAL_ERROR', 'Could not load drops.');
+      }
+      recentUnavailableRow = firstRow<DropRow>(recentData);
+    }
+    const displayRows = recentUnavailableRow
+      ? [...rows, recentUnavailableRow]
+      : rows;
     const categoriesByMerchant = await loadCategoriesByMerchantId(
       supabase,
-      merchantIdsFromDropRows(rows),
+      merchantIdsFromDropRows(displayRows),
     );
 
     return {
@@ -299,6 +318,13 @@ export const rewardsService: RewardsService = {
           serverNow,
         }),
       ),
+      recentUnavailableDrop: recentUnavailableRow
+        ? toDropDto(recentUnavailableRow, {
+            categoriesByMerchant,
+            detail: false,
+            serverNow,
+          })
+        : null,
       serverNow,
     };
   },
@@ -895,6 +921,12 @@ function getAvailability(
     row.merchant_relationship_status !== 'inactive';
 
   if (!dropActive) return { status: 'inactive', isAvailable: false };
+  if (row.availability_status === 'ended') {
+    return { status: 'ended', isAvailable: false };
+  }
+  if (row.availability_status === 'full') {
+    return { status: 'full', isAvailable: false };
+  }
   if (startDate && startDate > now) return { status: 'upcoming', isAvailable: false };
   if (endDate && endDate < now) return { status: 'ended', isAvailable: false };
   if (!merchantActive) return { status: 'merchant_inactive', isAvailable: false };

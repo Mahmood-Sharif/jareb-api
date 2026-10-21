@@ -101,7 +101,11 @@ const receiptDto = {
 
 function createRewardService(overrides: Partial<RewardsService> = {}): RewardsService {
   return {
-    listDrops: vi.fn(async () => ({ drops: [dropDto], serverNow })),
+    listDrops: vi.fn(async () => ({
+      drops: [dropDto],
+      recentUnavailableDrop: null,
+      serverNow,
+    })),
     getDrop: vi.fn(async () => ({ drop: dropDto, serverNow })),
     claimDrop: vi.fn(async () => claimDto),
     listClaims: vi.fn(async () => [claimDto]),
@@ -169,6 +173,7 @@ describe('drops and claims API', () => {
     });
     await expect(response.json()).resolves.toEqual({
       drops: [dropDto],
+      recentUnavailableDrop: null,
       serverNow,
     });
   });

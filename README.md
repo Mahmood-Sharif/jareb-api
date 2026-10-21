@@ -73,10 +73,13 @@ Current implemented variable names:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
 
 The real Supabase project uses a publishable key. The current API implementation still names that binding `SUPABASE_ANON_KEY`; put the publishable key there until the API binding is renamed in a separate compatibility pass.
 
-`SUPABASE_SERVICE_ROLE_KEY` is optional and is not required for the current `/me` feature.
+`SUPABASE_SERVICE_ROLE_KEY` is required for device registration. The Firebase values are required only when an internal server process sends push notifications; they are never exposed to Flutter.
 
 Local Worker secrets can live in `.dev.vars`; it is ignored by Git.
 

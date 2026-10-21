@@ -31,6 +31,9 @@ npx wrangler secret put BIRD_ACCESS_KEY
 npx wrangler secret put BIRD_WORKSPACE_ID
 npx wrangler secret put BIRD_CHANNEL_ID
 npx wrangler secret put SEND_SMS_HOOK_SECRET        # must equal Supabase Auth Send SMS hook secret
+npx wrangler secret put FIREBASE_PROJECT_ID
+npx wrangler secret put FIREBASE_CLIENT_EMAIL
+npx wrangler secret put FIREBASE_PRIVATE_KEY
 ```
 
 `ACCOUNT_IDENTITY_HMAC_SECRET` fingerprints deleted accounts; changing it later breaks

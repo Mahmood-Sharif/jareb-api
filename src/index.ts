@@ -4,11 +4,13 @@ import { AppError, jsonError, toAppError } from './errors/app-error';
 import { createRequireAuth, type GetUserFromToken } from './middleware/auth';
 import { withCors } from './middleware/cors';
 import { createClaimsRoutes } from './routes/claims';
+import { createAuthRoutes } from './routes/auth';
 import { createAuthHooksRoutes } from './routes/auth-hooks';
 import { createDropsRoutes } from './routes/drops';
 import { createMeRoutes, type LoadProfile, type UpdateProfile } from './routes/me';
 import { createSavedDropsRoutes } from './routes/saved-drops';
 import { createWalletRoutes } from './routes/wallet';
+import { createPushRoutes } from './routes/push';
 import { healthRoutes } from './routes/health';
 import { rewardsService, type RewardsService } from './services/rewards';
 import {
@@ -27,8 +29,12 @@ export function createApp({
   savedDropsService = defaultSavedDropsService,
   walletService = defaultWalletService,
   birdSmsClient,
+  phoneAccountExists,
+  pushDevices,
 }: {
   birdSmsClient?: import('./integrations/bird/sms').BirdSmsClient;
+  phoneAccountExists?: import('./services/phone-signup').PhoneAccountExists;
+  pushDevices?: import('./services/push-devices').PushDeviceService;
   deleteAccount?: import('./services/account-deletion').AccountDeletionService['deleteAccount'];
   getUserFromToken?: GetUserFromToken;
   loadProfile?: LoadProfile;
@@ -43,12 +49,14 @@ export function createApp({
   app.use('*', withCors());
 
   app.route('/health', healthRoutes);
+  app.route('/auth', createAuthRoutes({ phoneAccountExists }));
   app.route('/auth/hooks', createAuthHooksRoutes({ birdSmsClient }));
   app.route('/me', createMeRoutes({ authMiddleware, deleteAccount, loadProfile, updateProfile }));
   app.route('/drops', createDropsRoutes({ authMiddleware, service: rewardService }));
   app.route('/claims', createClaimsRoutes({ authMiddleware, service: rewardService }));
   app.route('/saved-drops', createSavedDropsRoutes({ authMiddleware, service: savedDropsService }));
   app.route('/wallet', createWalletRoutes({ authMiddleware, service: walletService }));
+  app.route('/push', createPushRoutes({ authMiddleware, service: pushDevices }));
 
   app.notFound((c) => {
     return jsonError(c, new AppError(404, 'NOT_FOUND', 'Route not found.'));

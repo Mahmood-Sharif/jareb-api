@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:profile-phone-reconciliation:local": "node scripts/test/run-profile-phone-reconciliation-integration.mjs",
     "build": "wrangler deploy --dry-run --outdir dist"
   },
   "dependencies": {

@@ -5,6 +5,6 @@
   "compatibility_date": "2026-08-15",
   "vars": {
     "ENVIRONMENT": "production",
-    "ALLOWED_ORIGINS": "https://jareb.app,https://www.jareb.app"
+    "ALLOWED_ORIGINS": "https://jareb.app,https://www.jareb.app,https://jareb-customer-web.mahmood-dc7.workers.dev"
   }
 }

@@ -15,6 +15,9 @@ const workerEnvSchema = z.object({
   BIRD_WORKSPACE_ID: z.string().min(1).optional(),
   BIRD_CHANNEL_ID: z.string().min(1).optional(),
   SEND_SMS_HOOK_SECRET: z.string().min(1).optional(),
+  FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
   TARABUT_CLIENT_ID: z.string().min(1).optional(),
   TARABUT_CLIENT_SECRET: z.string().min(1).optional(),
   TARABUT_OAUTH_URL: z.string().url().optional(),
@@ -114,6 +117,28 @@ export function getSendSmsHookSecret(bindings: Partial<Bindings> = {}) {
   }
 
   return env.SEND_SMS_HOOK_SECRET;
+}
+
+export function getFirebaseMessagingConfig(bindings: Partial<Bindings> = {}) {
+  const env = parseWorkerEnv(bindings);
+
+  if (
+    !env.FIREBASE_PROJECT_ID ||
+    !env.FIREBASE_CLIENT_EMAIL ||
+    !env.FIREBASE_PRIVATE_KEY
+  ) {
+    throw new AppError(
+      500,
+      'CONFIGURATION_ERROR',
+      'Firebase messaging is not configured.',
+    );
+  }
+
+  return {
+    projectId: env.FIREBASE_PROJECT_ID.trim(),
+    clientEmail: env.FIREBASE_CLIENT_EMAIL.trim(),
+    privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n').trim(),
+  };
 }
 
 export function getAllowedOrigins(bindings: Partial<Bindings> = {}): string[] {

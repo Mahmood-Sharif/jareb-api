@@ -9,6 +9,11 @@ import type { AppEnv, Bindings } from '../src/types/app';
 
 const flutterWebOrigin = 'http://127.0.0.1:54321';
 const configuredOrigin = 'https://app.jareb.com';
+const productionOrigins = [
+  'https://jareb.app',
+  'https://www.jareb.app',
+  'https://jareb-customer-web.mahmood-dc7.workers.dev',
+];
 const testBindings: Partial<Bindings> = {
   ALLOWED_ORIGINS: configuredOrigin,
 };
@@ -19,7 +24,11 @@ const authUser = {
 } as User;
 
 const rewardService: RewardsService = {
-  listDrops: vi.fn(async () => ({ drops: [], serverNow: '2026-09-21T12:00:00.000Z' })),
+  listDrops: vi.fn(async () => ({
+    drops: [],
+    recentUnavailableDrop: null,
+    serverNow: '2026-09-21T12:00:00.000Z',
+  })),
   getDrop: vi.fn(),
   claimDrop: vi.fn(),
   listClaims: vi.fn(),
@@ -73,7 +82,7 @@ describe('CORS', () => {
 
   it('does not allow localhost origins when ENVIRONMENT is production', async () => {
     const productionBindings: Partial<Bindings> = {
-      ALLOWED_ORIGINS: 'https://jareb.app,https://www.jareb.app',
+      ALLOWED_ORIGINS: productionOrigins.join(','),
       ENVIRONMENT: 'production',
     };
 
@@ -98,10 +107,36 @@ describe('CORS', () => {
     );
     expect(preflight.headers.get('Access-Control-Allow-Origin')).toBeNull();
 
-    for (const origin of ['https://jareb.app', 'https://www.jareb.app']) {
+    for (const origin of productionOrigins) {
       const ok = await createApp().request('/health', { headers: { Origin: origin } }, productionBindings);
       expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(origin);
     }
+  });
+
+  it('allows preview origin for OPTIONS /me preflight in production', async () => {
+    const previewOrigin = 'https://jareb-customer-web.mahmood-dc7.workers.dev';
+    const productionBindings: Partial<Bindings> = {
+      ALLOWED_ORIGINS: productionOrigins.join(','),
+      ENVIRONMENT: 'production',
+    };
+
+    const response = await createApp().request(
+      '/me',
+      {
+        headers: {
+          Origin: previewOrigin,
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'Authorization',
+        },
+        method: 'OPTIONS',
+      },
+      productionBindings,
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(previewOrigin);
+    expect(response.headers.get('Access-Control-Allow-Methods')).toContain('GET');
+    expect(response.headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
   });
 
   it('adds CORS to successful GET /drops responses', async () => {

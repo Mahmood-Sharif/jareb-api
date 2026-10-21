@@ -92,11 +92,16 @@ beforeEach(() => {
 
 describe('rewards service claim hydration', () => {
   it('listDrops returns active available Drops for a fresh eligible user', async () => {
-    vi.mocked(createSupabaseUserClient).mockReturnValue(
-      createFakeSupabaseClient({
-        listDrops: [customerDrop],
-      }) as never,
-    );
+    const client = createFakeSupabaseClient({
+      listDrops: [customerDrop],
+      recentUnavailableDrop: {
+        ...customerDrop,
+        id: 'drop_ended',
+        end_date: '2020-09-30T00:00:00.000Z',
+        availability_status: 'ended',
+      },
+    });
+    vi.mocked(createSupabaseUserClient).mockReturnValue(client as never);
 
     const result = await rewardsService.listDrops({
       ...context,
@@ -104,6 +109,7 @@ describe('rewards service claim hydration', () => {
     });
 
     expect(result.drops).toHaveLength(1);
+    expect(result.recentUnavailableDrop).toBeNull();
     expect(result.drops[0]).toMatchObject({
       id: 'drop_123',
       title: 'Coffee reward',
@@ -121,6 +127,57 @@ describe('rewards service claim hydration', () => {
         name: 'Jareb Cafe',
         area: 'Manama',
       },
+    });
+    expect(client.rpc).not.toHaveBeenCalledWith('get_recent_unavailable_drop');
+  });
+
+  it('returns one ended Drop when no active Drop is available', async () => {
+    vi.mocked(createSupabaseUserClient).mockReturnValue(
+      createFakeSupabaseClient({
+        recentUnavailableDrop: {
+          ...customerDrop,
+          id: 'drop_ended',
+          end_date: '2020-09-30T00:00:00.000Z',
+          remaining_capacity: 18,
+          availability_status: 'ended',
+        },
+      }) as never,
+    );
+
+    const result = await rewardsService.listDrops(context);
+
+    expect(result.drops).toEqual([]);
+    expect(result.recentUnavailableDrop).toMatchObject({
+      id: 'drop_ended',
+      isAvailable: false,
+      availabilityStatus: 'ended',
+      viewer: { canClaim: false },
+    });
+  });
+
+  it('returns one fully claimed Drop using authoritative remaining capacity', async () => {
+    vi.mocked(createSupabaseUserClient).mockReturnValue(
+      createFakeSupabaseClient({
+        recentUnavailableDrop: {
+          ...customerDrop,
+          id: 'drop_full',
+          claim_count: 35,
+          active_claim_count: 30,
+          remaining_capacity: 0,
+          availability_status: 'full',
+        },
+      }) as never,
+    );
+
+    const result = await rewardsService.listDrops(context);
+
+    expect(result.recentUnavailableDrop).toMatchObject({
+      id: 'drop_full',
+      claimCount: 35,
+      remainingCapacity: 0,
+      isAvailable: false,
+      availabilityStatus: 'full',
+      viewer: { canClaim: false },
     });
   });
 
@@ -323,6 +380,7 @@ function createFakeSupabaseClient({
   claims = [],
   claimsError = null,
   listDrops = [],
+  recentUnavailableDrop = null,
   drops = [customerDrop],
   receipts = [],
   receiptsError = null,
@@ -333,6 +391,7 @@ function createFakeSupabaseClient({
   claims?: unknown[];
   claimsError?: PostgrestError | null;
   listDrops?: unknown[];
+  recentUnavailableDrop?: unknown;
   drops?: unknown[];
   receipts?: unknown[];
   receiptsError?: PostgrestError | null;
@@ -341,6 +400,13 @@ function createFakeSupabaseClient({
     rpc: vi.fn(async (name: string, params?: Record<string, unknown>) => {
       if (name === 'list_available_drops') {
         return { data: listDrops, error: null };
+      }
+
+      if (name === 'get_recent_unavailable_drop') {
+        return {
+          data: recentUnavailableDrop == null ? [] : [recentUnavailableDrop],
+          error: null,
+        };
       }
 
       if (name === 'claim_drop') {
