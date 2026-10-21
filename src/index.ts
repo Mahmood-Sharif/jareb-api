@@ -31,10 +31,12 @@ export function createApp({
   birdSmsClient,
   phoneAccountExists,
   pushDevices,
+  pushSender,
 }: {
   birdSmsClient?: import('./integrations/bird/sms').BirdSmsClient;
   phoneAccountExists?: import('./services/phone-signup').PhoneAccountExists;
   pushDevices?: import('./services/push-devices').PushDeviceService;
+  pushSender?: import('./routes/push').PushSender;
   deleteAccount?: import('./services/account-deletion').AccountDeletionService['deleteAccount'];
   getUserFromToken?: GetUserFromToken;
   loadProfile?: LoadProfile;
@@ -56,7 +58,14 @@ export function createApp({
   app.route('/claims', createClaimsRoutes({ authMiddleware, service: rewardService }));
   app.route('/saved-drops', createSavedDropsRoutes({ authMiddleware, service: savedDropsService }));
   app.route('/wallet', createWalletRoutes({ authMiddleware, service: walletService }));
-  app.route('/push', createPushRoutes({ authMiddleware, service: pushDevices }));
+  app.route(
+    '/push',
+    createPushRoutes({
+      authMiddleware,
+      service: pushDevices,
+      sendPush: pushSender,
+    }),
+  );
 
   app.notFound((c) => {
     return jsonError(c, new AppError(404, 'NOT_FOUND', 'Route not found.'));

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { getFirebaseMessagingConfig } from '../src/config/env';
 import { createFirebasePushClient } from '../src/integrations/firebase/push';
 
 const config = {
@@ -92,5 +93,37 @@ describe('Firebase HTTP v1 push client', () => {
       code: 'PUSH_DELIVERY_FAILED',
       statusCode: 502,
     });
+  });
+});
+
+describe('Firebase messaging configuration', () => {
+  const baseConfig = {
+    FIREBASE_PROJECT_ID: ' jareb-app ',
+    FIREBASE_CLIENT_EMAIL: 'firebase@example.iam.gserviceaccount.com',
+  };
+
+  it('accepts a PEM private key with real newlines', () => {
+    const privateKey = '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----';
+
+    expect(
+      getFirebaseMessagingConfig({
+        ...baseConfig,
+        FIREBASE_PRIVATE_KEY: privateKey,
+      }),
+    ).toEqual({
+      projectId: 'jareb-app',
+      clientEmail: 'firebase@example.iam.gserviceaccount.com',
+      privateKey,
+    });
+  });
+
+  it('converts escaped private-key newlines from Worker secrets', () => {
+    expect(
+      getFirebaseMessagingConfig({
+        ...baseConfig,
+        FIREBASE_PRIVATE_KEY:
+          '-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----',
+      }).privateKey,
+    ).toBe('-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----');
   });
 });

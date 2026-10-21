@@ -1,6 +1,7 @@
 import { AppError } from '../../errors/app-error';
 
 export const pushNotificationTypes = [
+  'test',
   'drop_live',
   'claim_expiring',
   'cashback_approved',
