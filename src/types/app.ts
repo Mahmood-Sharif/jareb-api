@@ -15,6 +15,7 @@ export type Bindings = {
   FIREBASE_PROJECT_ID?: string;
   FIREBASE_CLIENT_EMAIL?: string;
   FIREBASE_PRIVATE_KEY?: string;
+  PUSH_TEST_ENABLED?: string;
   TARABUT_CLIENT_ID?: string;
   TARABUT_CLIENT_SECRET?: string;
   TARABUT_OAUTH_URL?: string;

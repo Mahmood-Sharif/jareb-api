@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { AppError } from '../errors/app-error';
 import { requireAuth } from '../middleware/auth';
+import { sendPushToUser } from '../services/push-notifications';
 import {
   pushDeviceService,
   type PushDeviceService,
@@ -23,12 +24,33 @@ const unregisterDeviceSchema = z.object({
 export function createPushRoutes({
   authMiddleware = requireAuth,
   service = pushDeviceService,
+  sendToUser = sendPushToUser,
 }: {
   authMiddleware?: MiddlewareHandler<AppEnv>;
   service?: PushDeviceService;
+  sendToUser?: typeof sendPushToUser;
 } = {}) {
   const routes = new Hono<AppEnv>();
   routes.use('*', authMiddleware);
+
+  // Sends a test push to the caller's own devices only. Disabled unless the
+  // PUSH_TEST_ENABLED binding is "true" so production stays closed by default.
+  routes.post('/test', async (c) => {
+    if (c.env?.PUSH_TEST_ENABLED !== 'true') {
+      throw new AppError(404, 'NOT_FOUND', 'Not found.');
+    }
+
+    const summary = await sendToUser({
+      bindings: c.env ?? {},
+      userId: c.get('authUser').id,
+      message: {
+        title: 'Jareb test notification',
+        body: 'If you can read this, push notifications work.',
+        data: { type: 'drop_live' },
+      },
+    });
+    return c.json(summary);
+  });
 
   routes.post('/devices', async (c) => {
     const body = registerDeviceSchema.safeParse(await safeJson(c.req.raw));

@@ -20,6 +20,43 @@ function createAuthenticatedApp(service: PushDeviceService) {
   });
 }
 
+describe('push test endpoint', () => {
+  const summary = { attempted: 1, delivered: 1, failed: 0, disabled: 0 };
+
+  function createTestApp(sendToUser: typeof import('../src/services/push-notifications').sendPushToUser) {
+    return createApp({
+      getUserFromToken: async () => authUser,
+      pushSender: sendToUser,
+    });
+  }
+
+  const request = (app: ReturnType<typeof createApp>, env: object) =>
+    app.request(
+      '/push/test',
+      { method: 'POST', headers: { Authorization: 'Bearer valid-token' } },
+      env,
+    );
+
+  it('is closed unless PUSH_TEST_ENABLED is true', async () => {
+    const send = vi.fn(async () => summary);
+    const response = await request(createTestApp(send), {});
+
+    expect(response.status).toBe(404);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('sends only to the authenticated user when enabled', async () => {
+    const send = vi.fn(async () => summary);
+    const response = await request(createTestApp(send), { PUSH_TEST_ENABLED: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(summary);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: authUser.id }),
+    );
+  });
+});
+
 describe('push device API', () => {
   it('protects device registration with bearer authentication', async () => {
     const response = await createApp().request('/push/devices', {
