@@ -96,6 +96,7 @@ export function createPushRoutes({
       tokens_targeted: result.attempted,
       sent: result.delivered,
       failed: result.failed,
+      errors: result.errors,
     });
   });
 

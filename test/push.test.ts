@@ -122,6 +122,13 @@ describe('push device API', () => {
       delivered: 1,
       failed: 1,
       disabled: 1,
+      errors: [
+        {
+          code: 'UNREGISTERED',
+          status: 'NOT_FOUND',
+          message: 'Requested entity was not found.',
+        },
+      ],
     }));
     const response = await createAuthenticatedApp(service, pushSender).request(
       '/push/test',
@@ -140,6 +147,13 @@ describe('push device API', () => {
       tokens_targeted: 2,
       sent: 1,
       failed: 1,
+      errors: [
+        {
+          code: 'UNREGISTERED',
+          status: 'NOT_FOUND',
+          message: 'Requested entity was not found.',
+        },
+      ],
     });
     expect(pushSender).toHaveBeenCalledWith({
       bindings: {},
@@ -159,6 +173,7 @@ describe('push device API', () => {
       delivered: 1,
       failed: 0,
       disabled: 0,
+      errors: [],
     }));
     const dropId = '10000000-0000-0000-0000-000000000001';
     const response = await createAuthenticatedApp(service, pushSender).request(

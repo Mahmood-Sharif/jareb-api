@@ -73,13 +73,26 @@ describe('Firebase HTTP v1 push client', () => {
     await expect(client.send('stale-token', message)).resolves.toEqual({
       accepted: false,
       invalidToken: true,
+      error: {
+        httpStatus: 404,
+        code: 'UNREGISTERED',
+        status: 'NOT_FOUND',
+        message: 'Requested entity was not found.',
+      },
     });
   });
 
   it('does not expose upstream validation failures', async () => {
+    const token = 'sensitive-registration-token';
     const fetchFn = vi.fn(async () =>
       new Response(
-        JSON.stringify({ error: { status: 'PERMISSION_DENIED' } }),
+        JSON.stringify({
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message: `Registration ${token} is not authorized.`,
+          },
+        }),
         { status: 403 },
       ),
     );
@@ -89,9 +102,15 @@ describe('Firebase HTTP v1 push client', () => {
       accessTokenProvider: async () => 'oauth-token',
     });
 
-    await expect(client.send('device-token', message)).rejects.toMatchObject({
+    await expect(client.send(token, message)).rejects.toMatchObject({
       code: 'PUSH_DELIVERY_FAILED',
       statusCode: 502,
+      diagnostic: {
+        httpStatus: 403,
+        code: '403',
+        status: 'PERMISSION_DENIED',
+        message: 'Registration [redacted-token] is not authorized.',
+      },
     });
   });
 });
