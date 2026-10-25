@@ -27,6 +27,7 @@ const rewardService: RewardsService = {
   listDrops: vi.fn(async () => ({
     drops: [],
     recentUnavailableDrop: null,
+    nextDropStartsAt: null,
     serverNow: '2026-09-21T12:00:00.000Z',
   })),
   getDrop: vi.fn(),

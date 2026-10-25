@@ -104,6 +104,7 @@ function createRewardService(overrides: Partial<RewardsService> = {}): RewardsSe
     listDrops: vi.fn(async () => ({
       drops: [dropDto],
       recentUnavailableDrop: null,
+      nextDropStartsAt: '2026-10-29T14:00:00.000Z',
       serverNow,
     })),
     getDrop: vi.fn(async () => ({ drop: dropDto, serverNow })),
@@ -174,6 +175,7 @@ describe('drops and claims API', () => {
     await expect(response.json()).resolves.toEqual({
       drops: [dropDto],
       recentUnavailableDrop: null,
+      nextDropStartsAt: '2026-10-29T14:00:00.000Z',
       serverNow,
     });
   });

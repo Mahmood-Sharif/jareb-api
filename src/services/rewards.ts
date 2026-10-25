@@ -239,6 +239,7 @@ export type RewardsService = {
   listDrops(context: RewardsServiceContext): Promise<{
     drops: DropDto[];
     recentUnavailableDrop: DropDto | null;
+    nextDropStartsAt: string | null;
     serverNow: string;
   }>;
   getDrop(
@@ -287,6 +288,18 @@ export const rewardsService: RewardsService = {
       throw new AppError(500, 'INTERNAL_ERROR', 'Could not load drops.');
     }
 
+    const { data: nextDropStartData, error: nextDropStartError } =
+      await supabase.rpc('get_next_scheduled_drop_start');
+    if (nextDropStartError) {
+      logSupabaseError(
+        'listDrops.get_next_scheduled_drop_start',
+        nextDropStartError,
+      );
+      throw new AppError(500, 'INTERNAL_ERROR', 'Could not load drops.');
+    }
+    const nextDropStartsAt =
+      typeof nextDropStartData === 'string' ? nextDropStartData : null;
+
     const rows = ((data ?? []) as DropRow[]).filter((row) => {
       const remaining = nullableNumber(row.remaining_capacity);
       return remaining === null || remaining > 0;
@@ -325,6 +338,7 @@ export const rewardsService: RewardsService = {
             serverNow,
           })
         : null,
+      nextDropStartsAt,
       serverNow,
     };
   },

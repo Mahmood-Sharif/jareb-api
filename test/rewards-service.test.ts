@@ -131,6 +131,17 @@ describe('rewards service claim hydration', () => {
     expect(client.rpc).not.toHaveBeenCalledWith('get_recent_unavailable_drop');
   });
 
+  it('returns the next scheduled Drop start without exposing future details', async () => {
+    const nextDropStartsAt = '2026-10-29T14:00:00.000Z';
+    vi.mocked(createSupabaseUserClient).mockReturnValue(
+      createFakeSupabaseClient({ nextDropStartsAt }) as never,
+    );
+
+    const result = await rewardsService.listDrops(context);
+
+    expect(result.nextDropStartsAt).toBe(nextDropStartsAt);
+  });
+
   it('returns one ended Drop when no active Drop is available', async () => {
     vi.mocked(createSupabaseUserClient).mockReturnValue(
       createFakeSupabaseClient({
@@ -381,6 +392,7 @@ function createFakeSupabaseClient({
   claimsError = null,
   listDrops = [],
   recentUnavailableDrop = null,
+  nextDropStartsAt = null,
   drops = [customerDrop],
   receipts = [],
   receiptsError = null,
@@ -392,6 +404,7 @@ function createFakeSupabaseClient({
   claimsError?: PostgrestError | null;
   listDrops?: unknown[];
   recentUnavailableDrop?: unknown;
+  nextDropStartsAt?: string | null;
   drops?: unknown[];
   receipts?: unknown[];
   receiptsError?: PostgrestError | null;
@@ -407,6 +420,10 @@ function createFakeSupabaseClient({
           data: recentUnavailableDrop == null ? [] : [recentUnavailableDrop],
           error: null,
         };
+      }
+
+      if (name === 'get_next_scheduled_drop_start') {
+        return { data: nextDropStartsAt, error: null };
       }
 
       if (name === 'claim_drop') {

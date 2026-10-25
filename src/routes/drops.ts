@@ -19,13 +19,19 @@ export function createDropsRoutes({
   dropsRoutes.get('/', async (c) => {
     const user = c.get('authUser');
     const accessToken = c.get('authAccessToken');
-    const { drops, recentUnavailableDrop, serverNow } = await service.listDrops({
-      accessToken,
-      bindings: c.env ?? {},
-      userId: user.id,
-    });
+    const { drops, recentUnavailableDrop, nextDropStartsAt, serverNow } =
+      await service.listDrops({
+        accessToken,
+        bindings: c.env ?? {},
+        userId: user.id,
+      });
 
-    return c.json({ drops, recentUnavailableDrop, serverNow });
+    return c.json({
+      drops,
+      recentUnavailableDrop,
+      nextDropStartsAt,
+      serverNow,
+    });
   });
 
   dropsRoutes.get('/:id', async (c) => {
