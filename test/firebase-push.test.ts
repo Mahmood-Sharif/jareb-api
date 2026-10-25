@@ -44,6 +44,13 @@ describe('Firebase HTTP v1 push client', () => {
               title: message.title,
               body: message.body,
             },
+            android: {
+              priority: 'HIGH',
+              notification: {
+                channel_id: 'jareb_alerts',
+                sound: 'default',
+              },
+            },
             data: message.data,
           },
         }),

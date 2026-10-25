@@ -88,6 +88,13 @@ export function createFirebasePushClient({
           message: {
             token,
             notification: { title: message.title, body: message.body },
+            android: {
+              priority: 'HIGH',
+              notification: {
+                channel_id: 'jareb_alerts',
+                sound: 'default',
+              },
+            },
             data: message.data,
           },
         }),
