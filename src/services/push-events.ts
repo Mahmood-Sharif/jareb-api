@@ -17,7 +17,9 @@ const LOOKBACK_MS = 24 * HOUR_MS;
 const EXPIRY_WARNING_MS = 24 * HOUR_MS;
 const BATCH_LIMIT = 200;
 
-export type PushEventSummary = Record<PushNotificationType, number>;
+type ScheduledPushNotificationType = Exclude<PushNotificationType, 'test'>;
+
+export type PushEventSummary = Record<ScheduledPushNotificationType, number>;
 
 type Ref = { id: string; user_id?: string };
 

@@ -1,6 +1,7 @@
 import { AppError } from '../../errors/app-error';
 
 export const pushNotificationTypes = [
+  'test',
   'drop_live',
   'claim_expiring',
   'cashback_approved',
@@ -21,12 +22,38 @@ export type PushMessage = {
   data: { type: PushNotificationType } & Record<string, string>;
 };
 
-export type FirebasePushClient = {
-  send(token: string, message: PushMessage): Promise<{
-    accepted: boolean;
-    invalidToken: boolean;
-  }>;
+export type PushDeliveryDiagnostic = {
+  httpStatus: number;
+  code: string;
+  status: string;
+  message: string;
 };
+
+export type FirebasePushResult = {
+  accepted: boolean;
+  invalidToken: boolean;
+  error?: PushDeliveryDiagnostic;
+};
+
+export type FirebasePushClient = {
+  send(token: string, message: PushMessage): Promise<FirebasePushResult>;
+};
+
+export class FirebasePushError extends AppError {
+  constructor(
+    code: 'PUSH_AUTHENTICATION_FAILED' | 'PUSH_DELIVERY_FAILED',
+    public readonly diagnostic: PushDeliveryDiagnostic,
+  ) {
+    super(
+      502,
+      code,
+      code === 'PUSH_AUTHENTICATION_FAILED'
+        ? 'Push notification authentication failed.'
+        : 'Push notification delivery failed.',
+    );
+    this.name = 'FirebasePushError';
+  }
+}
 
 type Fetch = typeof fetch;
 
@@ -61,6 +88,13 @@ export function createFirebasePushClient({
           message: {
             token,
             notification: { title: message.title, body: message.body },
+            android: {
+              priority: 'HIGH',
+              notification: {
+                channel_id: 'jareb_alerts',
+                sound: 'default',
+              },
+            },
             data: message.data,
           },
         }),
@@ -74,17 +108,23 @@ export function createFirebasePushClient({
         error.code === 'UNREGISTERED' ||
         (error.status === 'INVALID_ARGUMENT' &&
           error.message.toLowerCase().includes('registration token'));
+      const diagnostic: PushDeliveryDiagnostic = {
+        httpStatus: response.status,
+        code: error.code || `HTTP_${response.status}`,
+        status: error.status || 'FCM_ERROR',
+        message: sanitizeDescription(
+          error.message || response.statusText || 'Firebase rejected the message.',
+          token,
+        ),
+      };
 
-      if (invalidToken) return { accepted: false, invalidToken: true };
+      if (invalidToken) {
+        return { accepted: false, invalidToken: true, error: diagnostic };
+      }
 
-      console.error('FCM delivery failed', {
-        status: response.status,
-        code: error.status,
-      });
-      throw new AppError(
-        502,
+      throw new FirebasePushError(
         'PUSH_DELIVERY_FAILED',
-        'Push notification delivery failed.',
+        diagnostic,
       );
     },
   };
@@ -108,13 +148,22 @@ export function createFirebasePushClient({
     const expiresIn = payload?.expires_in;
 
     if (!response.ok || typeof accessToken !== 'string') {
-      console.error('Firebase OAuth token request failed', {
-        status: response.status,
-      });
-      throw new AppError(
-        502,
+      const oauthCode =
+        typeof payload?.error === 'string'
+          ? payload.error
+          : 'PUSH_AUTHENTICATION_FAILED';
+      const oauthMessage =
+        typeof payload?.error_description === 'string'
+          ? payload.error_description
+          : 'Firebase OAuth token request failed.';
+      throw new FirebasePushError(
         'PUSH_AUTHENTICATION_FAILED',
-        'Push notification authentication failed.',
+        {
+          httpStatus: response.status,
+          code: oauthCode,
+          status: 'OAUTH_ERROR',
+          message: sanitizeDescription(oauthMessage),
+        },
       );
     }
 
@@ -210,6 +259,52 @@ async function parseFcmError(response: Response) {
   return {
     status: typeof record.status === 'string' ? record.status : '',
     message: typeof record.message === 'string' ? record.message : '',
-    code: typeof detail?.errorCode === 'string' ? detail.errorCode : '',
+    code:
+      typeof detail?.errorCode === 'string'
+        ? detail.errorCode
+        : typeof record.code === 'string' || typeof record.code === 'number'
+          ? String(record.code)
+          : '',
   };
+}
+
+export function diagnosticForPushError(
+  error: unknown,
+  token: string,
+): PushDeliveryDiagnostic {
+  if (error instanceof FirebasePushError) return error.diagnostic;
+  if (error instanceof AppError) {
+    return {
+      httpStatus: 0,
+      code: error.code,
+      status: error.code,
+      message: sanitizeDescription(error.message, token),
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      httpStatus: 0,
+      code: 'PUSH_DELIVERY_FAILED',
+      status: error.name || 'NETWORK_ERROR',
+      message: sanitizeDescription(error.message, token),
+    };
+  }
+  return {
+    httpStatus: 0,
+    code: 'PUSH_DELIVERY_FAILED',
+    status: 'UNKNOWN_ERROR',
+    message: 'Push notification delivery failed.',
+  };
+}
+
+function sanitizeDescription(value: string, token?: string) {
+  let sanitized = value;
+  if (token) sanitized = sanitized.split(token).join('[redacted-token]');
+  return sanitized
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(
+      /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g,
+      '[redacted-private-key]',
+    )
+    .slice(0, 500);
 }

@@ -1,7 +1,9 @@
 import { getFirebaseMessagingConfig, getSupabaseServiceConfig } from '../config/env';
 import {
   createFirebasePushClient,
+  diagnosticForPushError,
   type FirebasePushClient,
+  type PushDeliveryDiagnostic,
   type PushMessage,
 } from '../integrations/firebase/push';
 import type { Bindings } from '../types/app';
@@ -13,6 +15,13 @@ export type PushSendSummary = {
   delivered: number;
   failed: number;
   disabled: number;
+  errors: PushSendError[];
+};
+
+export type PushSendError = {
+  code: string;
+  status: string;
+  message: string;
 };
 
 export async function sendPushToUser({
@@ -63,6 +72,7 @@ async function sendToDevices({
     delivered: 0,
     failed: 0,
     disabled: 0,
+    errors: [],
   };
 
   for (const device of devices) {
@@ -74,17 +84,52 @@ async function sendToDevices({
         summary.failed += 1;
       }
 
+      let tokenDisabled = false;
       if (result.invalidToken) {
         summary.disabled += 1;
-        await supabase
+        const { error } = await supabase
           .from('push_devices')
           .update({ notifications_enabled: false })
           .eq('id', device.id);
+        tokenDisabled = error === null;
       }
-    } catch {
+
+      if (!result.accepted) {
+        const diagnostic =
+          result.error ?? diagnosticForPushError(undefined, device.fcm_token);
+        summary.errors.push(publicPushError(diagnostic));
+        logPushFailure(diagnostic, device.fcm_token, tokenDisabled);
+      }
+    } catch (error) {
       summary.failed += 1;
+      const diagnostic = diagnosticForPushError(error, device.fcm_token);
+      summary.errors.push(publicPushError(diagnostic));
+      logPushFailure(diagnostic, device.fcm_token, false);
     }
   }
 
   return summary;
+}
+
+function publicPushError(diagnostic: PushDeliveryDiagnostic): PushSendError {
+  return {
+    code: diagnostic.code,
+    status: diagnostic.status,
+    message: diagnostic.message,
+  };
+}
+
+function logPushFailure(
+  diagnostic: PushDeliveryDiagnostic,
+  token: string,
+  tokenDisabled: boolean,
+) {
+  console.error('FCM delivery failed', {
+    httpStatus: diagnostic.httpStatus,
+    code: diagnostic.code,
+    status: diagnostic.status,
+    message: diagnostic.message,
+    tokenDisabled,
+    tokenSuffix: token.length > 6 ? token.slice(-6) : '[short-token]',
+  });
 }
